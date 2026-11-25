@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>wasmgen browser example</title></head>
+  <body>
+    <main>
+      <h1>wasmgen</h1>
+      <p>Go and C++ functions, generated as typed browser imports.</p>
+      <p id="status" role="status">Initializing WebAssembly workers…</p>
+      <form id="compute">
+        <label>Value <input id="value" type="number" value="12" step="any" required></label>
+        <button disabled>Call C++ and Go</button>
+      </form>
+      <pre id="result" aria-live="polite"></pre>
+    </main>
+    <script type="module" src="./src/app/main.ts"></script>
+  </body>
+</html>

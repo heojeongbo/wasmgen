@@ -1,0 +1,14 @@
+node_modules/
+.test-output/
+.artifacts/
+.toolchains/
+examples/web/generated/
+examples/web/dist/
+*.tgz
+*.log
+dist/
+.test-build/
+.pnpm-store/
+.env
+.env.*
+!.env.example

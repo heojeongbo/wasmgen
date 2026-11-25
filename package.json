@@ -1,0 +1,58 @@
+{
+  "name": "@heojeongbo/wasmgen",
+  "version": "0.1.0",
+  "description": "Generate browser WebAssembly modules and typed clients from Go and C++ sources.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "wasmgen": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heojeongbo/wasmgen.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "scripts": {
+    "build": "tsx scripts/build.ts",
+    "check": "pnpm run typecheck && pnpm run architecture:check",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:generated": "tsc --noEmit -p test/types/tsconfig.json",
+    "architecture:check": "tsx scripts/check-architecture.ts",
+    "test:compile": "tsc -p test/tsconfig.json",
+    "test": "pnpm run build && pnpm run test:compile && node --test .test-build/test/*.test.js",
+    "test:e2e": "pnpm run build && pnpm run gen:example && pnpm run typecheck:generated && pnpm run test:compile:e2e && node .test-build/test/e2e/run.js",
+    "test:package": "pnpm run build && pnpm run gen:example && pnpm run test:compile:e2e && node .test-build/test/e2e/package.js",
+    "prepack": "pnpm run build",
+    "test:compile:e2e": "tsc -p test/e2e/tsconfig.json",
+    "gen:example": "node dist/cli.js gen --config examples/wasmgen.yaml"
+  },
+  "dependencies": {
+    "yaml": "2.9.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "playwright": "1.60.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.8",
+    "@types/node": "24.3.0",
+    "tsx": "4.20.4"
+  },
+  "packageManager": "pnpm@10.11.0"
+}

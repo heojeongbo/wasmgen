@@ -1,0 +1,31 @@
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
+import type { CompilerAdapters } from '../adapters/compiler.js';
+import { readConfig } from '../config.js';
+import { writeBarrel, writeShared, writeWeb } from '../codegen/web.js';
+import { withOutput } from '../storage/output.js';
+
+export interface GenerateOptions { signal?: AbortSignal; onProgress?: (message: string) => void }
+export function createGenerator(adapters: CompilerAdapters) {
+  return async (configPath: string, options: GenerateOptions = {}): Promise<{ output: string; modules: string[] }> => {
+    const config = await readConfig(configPath);
+    await withOutput(config.output, async (staging, result) => {
+      const builds = path.join(staging, 'builds');
+      await mkdir(builds);
+      await writeShared(result);
+      for (const mod of config.input) {
+        options.signal?.throwIfAborted();
+        options.onProgress?.(`building ${mod.name} (${mod.language})`);
+        const directory = path.join(result, mod.name);
+        const scratch = path.join(builds, mod.name);
+        await mkdir(directory);
+        await mkdir(scratch);
+        const adapter = adapters[mod.language];
+        await adapter.build(mod, { directory, scratch, tools: config.tools, signal: options.signal });
+        await writeWeb(mod, directory, adapter);
+      }
+      await writeBarrel(config.input, result);
+    }, options.signal);
+    return { output: config.output, modules: config.input.map((mod) => mod.name) };
+  };
+}

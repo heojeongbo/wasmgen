@@ -1,0 +1,65 @@
+version: 1
+output: ./web/generated
+input:
+  - name: geometry
+    language: cpp
+    files: [./cpp/geometry.cc]
+    headers: [./cpp/geometry.h]
+    exports:
+      clamp:
+        symbol: geometry::Clamp
+        params: [{name: value, type: f64}, {name: low, type: f64}, {name: high, type: f64}]
+        result: f64
+      scale:
+        symbol: geometry::Scale
+        params: [{name: values, type: 'f64[]'}, {name: factor, type: f64}]
+        result: 'f64[]'
+      greet:
+        symbol: geometry::Greet
+        params: [{name: name, type: string}]
+        result: string
+      divide:
+        symbol: geometry::Divide
+        params: [{name: a, type: f64}, {name: b, type: f64}]
+        result: f64
+      busy:
+        symbol: geometry::Busy
+        params: [{name: milliseconds, type: f64}]
+        result: void
+  - name: policy
+    language: go
+    files: [./go/logic.go]
+    exports:
+      delayedDouble:
+        symbol: DelayedDouble
+        params: [{name: value, type: f64}, {name: milliseconds, type: i32}]
+        result: f64
+        error: true
+      upper:
+        symbol: Upper
+        params: [{name: value, type: string}]
+        result: string
+      scale:
+        symbol: Scale
+        params: [{name: values, type: 'f64[]'}, {name: factor, type: f64}]
+        result: 'f64[]'
+      divide:
+        symbol: Divide
+        params: [{name: a, type: f64}, {name: b, type: f64}]
+        result: f64
+        error: true
+      negate:
+        symbol: Negate
+        params: [{name: value, type: bool}]
+        result: bool
+      signed:
+        symbol: Signed
+        params: [{name: value, type: i32}]
+        result: i32
+      unsigned:
+        symbol: Unsigned
+        params: [{name: value, type: u32}]
+        result: u32
+      empty: {symbol: Empty, result: 'f64[]'}
+      notify: {symbol: Notify, result: void}
+      fail: {symbol: Fail, result: void}
