@@ -1,7 +1,7 @@
 {
   "name": "@heojeongbo/wasmgen",
   "version": "0.1.0",
-  "description": "Generate browser WebAssembly modules and typed clients from Go and C++ sources.",
+  "description": "Generate browser WebAssembly modules and typed clients from Go, C++ and Rust sources.",
   "type": "module",
   "license": "MIT",
   "bin": {

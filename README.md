@@ -1,13 +1,13 @@
 # wasmgen
 
-Generate browser WebAssembly modules and typed clients from Go and C++ sources.
+Generate browser WebAssembly modules and typed clients from Go, C++ and Rust sources.
 Declare native inputs, exported function signatures, and an output directory;
 then import the generated code from your TypeScript application.
 
 ```text
-Go files / package ── Go compiler ───────┐
-                                       ├── .wasm + Worker + JS + .d.ts
-C++ sources / headers ── Emscripten ─────┘            ↓
+Go files / package ── Go compiler ────────────┐
+C++ sources / headers ── Emscripten ──────────┼── .wasm + Worker + JS + .d.ts
+Rust crate root / package ── Cargo + bindgen ─┘            ↓
                                             TypeScript imports
 ```
 
@@ -16,13 +16,16 @@ runs in its own Web Worker and exposes Promise-returning functions. Generated
 code has no runtime npm dependency on wasmgen and contacts no build service.
 
 The project and CLI are named **wasmgen**. The npm package is
-`@heojeongbo/wasmgen`. Rust support is not implemented in this version.
+`@heojeongbo/wasmgen`. Rust support in this checkout is unreleased; npm `0.1.0`
+supports Go and C++. To try Rust before the next release, build this checkout
+and install its local tarball as described below.
 
 ## Install
 
-Build prerequisites: Node.js 22.12+, pnpm 10.11.0, Go 1.22+, and Emscripten's `em++` on
-`PATH`. C++ uses C++17. The [test container](test/Dockerfile) supplies the tested
-toolchains and browser engines if you do not want to install them locally.
+Build prerequisites: Node.js 22.12+, pnpm 10.11.0, and the toolchain for each
+configured language: Go 1.22+, Emscripten's `em++` (C++17), or Rust/Cargo with the
+`wasm32-unknown-unknown` target and `wasm-bindgen` CLI on `PATH`.
+The [test container](test/Dockerfile) supplies all tested toolchains and browsers.
 
 ```sh
 pnpm add -D @heojeongbo/wasmgen
@@ -46,8 +49,8 @@ node dist/cli.js gen --config examples/wasmgen.yaml
 pnpm exec vite examples/web
 ```
 
-Open the URL printed by Vite. The example calls C++ to clamp a number and Go to
-uppercase the result label. To build deployable static assets:
+Open the URL printed by Vite. The example calls C++ to clamp a number, Go to
+uppercase its label, and Rust to decorate that label. To build deployable static assets:
 
 ```sh
 pnpm exec vite build examples/web --base=/demo/
@@ -135,20 +138,22 @@ Factories accept `{ signal?: AbortSignal, timeoutMs?: number }`. The default
 30-second timeout applies to initialization and each call, including queue time.
 Abort, timeout, disposal, and fatal Wasm traps terminate the whole instance and
 reject every outstanding call. Create a new instance to resume. Ordinary Go
-errors, Go panics within the exported call, and C++ exceptions reject just that call. Go
+errors, Go panics within the exported call, Rust `Result::Err`, and C++ exceptions reject just that call. Go
 panics in independently running goroutines are outside the exported-call boundary.
+Rust panics abort the Wasm instance: pending calls reject and the Worker is
+terminated. Create a new client after a panic.
 
 ## Native interface
 
-| Config type | TypeScript | Go parameter | C++ parameter |
-| --- | --- | --- | --- |
-| `i32` | `number` | `int32` | `std::int32_t` |
-| `u32` | `number` | `uint32` | `std::uint32_t` |
-| `f64` | `number` | `float64` | `double` |
-| `bool` | `boolean` | `bool` | `bool` |
-| `string` | `string` | `string` | `std::string` |
-| `i32[]`, `u32[]`, `f64[]` | `number[]` | slice of the corresponding type | `std::vector<T>` |
-| `void` (result only) | `void` | no result | `void` |
+| Config type | TypeScript | Go parameter | C++ parameter | Rust parameter |
+| --- | --- | --- | --- | --- |
+| `i32` | `number` | `int32` | `std::int32_t` | `i32` |
+| `u32` | `number` | `uint32` | `std::uint32_t` | `u32` |
+| `f64` | `number` | `float64` | `double` | `f64` |
+| `bool` | `boolean` | `bool` | `bool` | `bool` |
+| `string` | `string` | `string` | `std::string` | `String` |
+| `i32[]`, `u32[]`, `f64[]` | `number[]` | slice of the corresponding type | `std::vector<T>` | `Vec<T>` |
+| `void` (result only) | `void` | no result | `void` | `()` |
 
 Numeric arguments/results are validated at runtime; `f64` requires finite values.
 `i32` and `u32` enforce their integer ranges. Nil Go slices become empty arrays.
@@ -167,6 +172,8 @@ User-created goroutines must have their own exit path while the instance lives.
 
 See `DelayedDouble` in [the Go example](examples/go/logic.go) for a channel/timer
 example tested in real browsers. C++ exports remain synchronous inside their Worker.
+Rust exports are also synchronous inside their Worker; `async fn` and Rust thread
+creation are not supported by this integration.
 Signatures are explicit in the config;
 wasmgen does not infer a whole native API. Use small native adapters for methods,
 custom parameter types, or APIs that differ from this table. C++ const-reference
@@ -203,7 +210,70 @@ adds include directories. All supplied sources are compiled and linked into a
 single module, with `-O3`, LTO, and warnings treated as errors. This version does
 not drive CMake or expose arbitrary linker flags.
 
+Rust uses Cargo to compile an isolated bridge crate for `wasm32-unknown-unknown`,
+then `wasm-bindgen --target web` generates its JavaScript bindings. Your native
+functions do not need `#[wasm_bindgen]` annotations. Install the browser target,
+a host linker (`cc`, needed by Cargo build scripts), and the binding CLI:
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.130 --locked
+```
+
+The generated bridge pins its `wasm-bindgen` crate to the installed CLI's exact
+version. The tested versions are Rust 1.100.0 and wasm-bindgen 0.2.130. If your
+package already depends on wasm-bindgen, use a compatible version of that CLI.
+
+Rust input modes:
+
+- `files: [./native/lib.rs]`: exactly one Rust 2021 crate root, with standard-library
+  dependencies. Relative `mod` declarations and `crate::` paths are preserved.
+- `package: ./native/my-crate`: a directory containing a library `Cargo.toml`.
+  This supports path dependencies and workspace-inherited package/dependency
+  settings. Select a concrete crate, not a virtual workspace or binary-only crate.
+
+The bridge uses the package's default features. Its isolated manifest does not
+inherit workspace-root `[patch]`, `[replace]`, or release profiles. A copy of the
+original workspace lockfile seeds resolution; Cargo may resolve additional binding
+dependencies in the temporary copy. Original sources, manifests, and lockfiles
+are not modified. Cargo may download dependencies during generation.
+
+For `Result<T, E>` returns, set `error: true`; `E` must implement `Display`.
+Use `result: void` for `Result<(), E>`. String and vector parameters are owned
+`String` and `Vec<T>`; adapt borrowed/custom types with ordinary Rust functions.
+Returned numeric typed arrays from wasm-bindgen are copied into the same plain
+`number[]` contract as Go and C++.
+
+```yaml
+version: 1
+output: ./web/generated
+input:
+  - name: arithmetic
+    language: rust
+    package: ./native/my-crate
+    exports:
+      divide:
+        symbol: math::divide
+        params: [{ name: a, type: f64 }, { name: b, type: f64 }]
+        result: f64
+        error: true
+```
+
+Import the generated factory just like the other languages:
+
+```ts
+import { arithmetic } from './generated/index.js';
+
+const rust = await arithmetic();
+try {
+  console.log(await rust.divide(42, 2)); // 21
+} finally {
+  rust.dispose();
+}
+```
+
 Use `tools: { go: /path/to/go, cpp: /path/to/em++ }` to override executables.
+Rust supports `tools: { cargo: /path/to/cargo, wasmBindgen: /path/to/wasm-bindgen }`.
 Executable names resolve through `PATH`; use absolute paths for overrides outside
 `PATH`. Compiler arguments are passed directly, without a shell.
 
@@ -211,7 +281,7 @@ The source and its dependencies must support the browser target. Native OS,
 hardware devices, raw sockets, filesystem access, cgo, pthreads, and arbitrary
 native libraries are not made browser-compatible automatically. This version
 targets portable computation; structs, pointers, callbacks, int64, streaming,
-Rust, and WASI are outside its supported interface.
+async Rust exports, and WASI are outside its supported interface.
 
 ## Build and deploy in a monorepo
 
@@ -267,23 +337,40 @@ the browser example uses the FSD subset it needs.
 | --- | --- |
 | `src/model/` | Configuration schema and value contracts |
 | `src/config.ts` | Parse, validate, and resolve input paths |
-| `src/application/` | Generation workflow using injected compiler adapters |
-| `src/adapters/go/`, `src/adapters/cpp/` | Native bridge generation, compiler invocation, language-specific Worker initialization |
+| `src/ports/` | Language validation/compilation contracts and compiled-module result |
+| `src/application/` | Generation workflow using injected language adapters and configuration reader |
+| `src/adapters/go/`, `src/adapters/cpp/`, `src/adapters/rust/` | Each language's validation, native bridge, compiler orchestration, and Worker initializer |
 | `src/storage/` | Output ownership, lock, staging, replacement, rollback |
 | `src/codegen/` | Shared browser client and declaration emission |
 | `src/runtime/` | Typed Worker protocol, call ordering, deadlines, lifetime |
-| `src/index.ts` | Compose the concrete Go/C++ adapters into the public API |
+| `src/languages.ts`, `src/index.ts` | Register language implementations once and compose the public API |
 | `examples/web/src/` | `app → pages → features → shared`; generated native clients enter through `shared/api` |
 
-The Go/C++ implementations adapt distinct toolchains to a single
-`CompilerAdapter` contract. The browser adapter presents generated native APIs
+The implementations adapt distinct toolchains to a typed `LanguageAdapter`
+contract. The registry maps each language to an adapter of that exact language.
+Configuration loading depends only on `InputValidator`; generation depends only
+on `LanguageCompiler`, keeping validation and compilation interfaces separate.
+The generation workflow receives the registry and configuration reader through
+dependency injection. Each compiler returns a `CompiledModule` with its Worker
+initializer; web codegen receives that string and has no compiler dependency.
+Validation, native bridge generation, compilation, and browser initialization
+live in separate files inside each language adapter.
+
+Adding a built-in language requires its adapter, registration in `src/languages.ts`,
+and schema/tool/type declarations. Configuration loading, output replacement,
+browser RPC, and shared web codegen do not need language branches. This is an
+internal extension point; this version does not expose a third-party plugin API.
+
+The browser adapter presents generated native APIs
 as a small `NativeOperations` contract; the calculation feature receives it
 as a dependency. The page owns DOM interaction while the feature owns the
 calculation sequence. Empty FSD layers, React, and template-specific application
-dependencies are not needed for this example.
+dependencies are not needed for this example. The native API adapter owns all
+created clients and disposes them in reverse order, including partial initialization failures.
 
 `pnpm run check` runs strict TypeScript checking and an import-boundary check:
-application/codegen cannot import concrete compilers, runtime code cannot import
+application/configuration/codegen cannot import concrete language adapters;
+adapters cannot import one another; ports depend on the model; runtime code cannot import
 build-time services, and FSD imports must flow downward through public entry points.
 It also rejects explicit TypeScript `any` and disabled type-checking directives.
 `pnpm run typecheck:generated` validates the generated declarations and browser
@@ -291,8 +378,8 @@ example after generation; test compilation checks all test code too.
 
 ## Validation
 
-The container uses Emscripten 4.0.10, Ubuntu's Go 1.22 toolchain, and Playwright
-1.60.0. Run from the wasmgen checkout with Docker available:
+The container uses Emscripten 4.0.10, Ubuntu's Go 1.22 toolchain, Rust 1.100.0,
+wasm-bindgen 0.2.130, and Playwright 1.60.0. Run from the wasmgen checkout with Docker available:
 
 ```sh
 docker build -t wasmgen-test:local -f test/Dockerfile .
@@ -312,16 +399,20 @@ pnpm run test:e2e
 pnpm run test:package
 ```
 
-`test:e2e` compiles real Go/C++, checks TypeScript declarations, and runs
+`test:e2e` compiles real Go/C++/Rust, checks TypeScript declarations, and runs
 Chromium, Firefox, and WebKit against Vite development and production output.
 It checks Unicode, numeric boundaries, arrays and memory growth, errors/panics,
 concurrency, goroutine/channel/timer completion, call ordering, responsiveness,
-cancellation, timeout, and Worker cleanup.
+cancellation, timeout, and Worker cleanup. Rust coverage includes fallible scalar,
+array and void results, relative modules, `crate::` resolution, bindgen-name collisions,
+memory growth, and panic rejection of pending calls.
 
 `test:package` packs and installs a local tarball into a separate
 consumer, invokes the installed CLI/library, compiles a Go `internal` package
-with a local `replace` dependency and a C++ module, typechecks imports, and runs
-the same browser/build matrix. Only public generator files enter the package.
+with a local `replace` dependency, a C++ module, and a Rust workspace library with
+a path dependency and custom library name. It checks original Rust files stay
+unchanged, typechecks imports, and runs the same browser/build matrix.
+Only public generator files enter the package.
 
 All checked-in fixtures are independent, general-purpose examples. No external
 application checkout is required. Reports, screenshots, and the local tarball are written to

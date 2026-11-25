@@ -1,10 +1,9 @@
 import { createGenerator } from './application/generate.js';
-import { cppAdapter } from './adapters/cpp/compiler.js';
-import { goAdapter } from './adapters/go/compiler.js';
+import { readConfig as read } from './config.js';
+import { languages } from './languages.js';
 
-// Only the composition root knows which concrete compilers the tool ships.
-export const generate = createGenerator({ cpp: cppAdapter, go: goAdapter });
-export { readConfig } from './config.js';
+export const readConfig = (configPath: string) => read(configPath, languages);
+export const generate = createGenerator(languages, readConfig);
 export type { GenerateOptions } from './application/generate.js';
 export type { Config, InputConfig, FunctionConfig, ResolvedConfig, ResolvedInput, ResolvedFunction } from './model/config.js';
 export type { ValueType } from './model/value-types.js';

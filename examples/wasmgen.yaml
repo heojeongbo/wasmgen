@@ -63,3 +63,47 @@ input:
       empty: {symbol: Empty, result: 'f64[]'}
       notify: {symbol: Notify, result: void}
       fail: {symbol: Fail, result: void}
+  - name: arithmetic
+    language: rust
+    files: [./rust/lib.rs]
+    exports:
+      label:
+        params: [{name: value, type: string}]
+        result: string
+      scale:
+        params: [{name: values, type: 'f64[]'}, {name: factor, type: f64}]
+        result: 'f64[]'
+      signed:
+        params: [{name: values, type: 'i32[]'}]
+        result: 'i32[]'
+      unsigned:
+        params: [{name: values, type: 'u32[]'}]
+        result: 'u32[]'
+      signedScalar:
+        symbol: signed_scalar
+        params: [{name: value, type: i32}]
+        result: i32
+      unsignedScalar:
+        symbol: unsigned_scalar
+        params: [{name: value, type: u32}]
+        result: u32
+      negate:
+        params: [{name: value, type: bool}]
+        result: bool
+      divide:
+        params: [{name: a, type: f64}, {name: b, type: f64}]
+        result: f64
+        error: true
+      checkedValues:
+        symbol: checked_values
+        params: [{name: valid, type: bool}]
+        result: 'f64[]'
+        error: true
+      checkedNotify:
+        symbol: checked_notify
+        params: [{name: valid, type: bool}]
+        result: void
+        error: true
+      initSync: {symbol: notify, result: void}
+      fail: {result: void}
+      busy: {result: void}

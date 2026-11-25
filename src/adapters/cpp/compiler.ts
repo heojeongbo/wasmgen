@@ -1,12 +1,13 @@
 import type { ResolvedInput } from '../../model/config.js';
-import type { BuildContext, CompilerAdapter } from '../compiler.js';
+import type { BuildContext, CompiledModule, LanguageAdapter } from '../../ports/language.js';
+import { validateInput } from './config.js';
 import { cppBridge } from './bridge.js';
 import { workerSource } from './worker.js';
 import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { run } from '../../process.js';
 
-async function build(mod: ResolvedInput, { directory, scratch, tools, signal }: BuildContext): Promise<void> {
+async function build(mod: ResolvedInput, { directory, scratch, tools, signal }: BuildContext): Promise<CompiledModule> {
   const bridge = path.join(scratch, 'bridge.cc');
   await writeFile(bridge, cppBridge(mod));
   const compiler = tools.cpp ?? 'em++';
@@ -31,6 +32,7 @@ async function build(mod: ResolvedInput, { directory, scratch, tools, signal }: 
   for (const name of ['EMSCRIPTEN-LICENSE', 'MUSL-COPYRIGHT', 'LIBCXX-LICENSE', 'LIBCXXABI-LICENSE', 'COMPILER-RT-LICENSE']) {
     await copyFile(new URL(`../../licenses/${name}`, import.meta.url), path.join(licenses, name));
   }
+  return { workerSource: workerSource() };
 }
 
-export const cppAdapter: CompilerAdapter = { language: 'cpp', build, workerSource };
+export const cppAdapter: LanguageAdapter<'cpp'> = { language: 'cpp', validateInput, build };

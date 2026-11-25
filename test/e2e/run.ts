@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { runBrowsers } from './browser.js';
+import { exerciseRust } from './rust.js';
 
 import type * as Generated from '../../examples/web/generated/index.js';
 type BrowserGlobals = typeof globalThis & { __wasmgenTest: typeof Generated };
@@ -10,16 +11,16 @@ const root = path.resolve('.test-output/browser');
 await rm(root, { recursive: true, force: true });
 await mkdir(root, { recursive: true });
 await cp('examples/web', root, { recursive: true, filter: (source) => !source.includes('/dist') });
-await writeFile(path.join(root, 'test-entry.ts'), "import './src/app/main.ts';\nimport { geometry, policy } from './generated/index.js';\nObject.assign(globalThis, { __wasmgenTest: { geometry, policy } });\n");
+await writeFile(path.join(root, 'test-entry.ts'), "import './src/app/main.ts';\nimport { arithmetic, geometry, policy } from './generated/index.js';\nObject.assign(globalThis, { __wasmgenTest: { arithmetic, geometry, policy } });\n");
 const html = await readFile(path.join(root, 'index.html'), 'utf8');
 await writeFile(path.join(root, 'index.html'), html.replace('./src/app/main.ts', './test-entry.ts'));
 
 await runBrowsers(root, async (page) => {
   await page.waitForFunction(() => document.querySelector('#status')?.textContent?.includes('are ready'));
   await page.locator('#value').fill('23');
-  await page.getByRole('button', { name: 'Call C++ and Go' }).click();
+  await page.getByRole('button', { name: 'Call C++, Go and Rust' }).click();
   await page.waitForFunction(() => document.querySelector('#result')?.textContent?.includes('VALUE: 10'));
-  assert.deepEqual(JSON.parse(await page.locator('#result').innerText()), { clamped: 10, label: 'VALUE: 10' });
+  assert.deepEqual(JSON.parse(await page.locator('#result').innerText()), { clamped: 10, label: 'VALUE: 10', rustLabel: 'Rust: VALUE: 10' });
   const values = await page.evaluate(async () => {
     const { geometry, policy } = (globalThis as BrowserGlobals).__wasmgenTest;
     const cpp = await geometry();
@@ -132,8 +133,9 @@ await runBrowsers(root, async (page) => {
   assert.match(values.abortInitialization, /abort during initialization/);
   assert.match(values.abortPending, /abort pending computation/);
   assert.match(values.timeout, /timed out/);
-  // Only the two live example clients remain after all test instances close.
-  await Promise.all(page.workers().slice(2).map((worker) => worker.waitForEvent('close', { timeout: 15_000 })));
-  assert.equal(page.workers().length, 2, 'disposed workers must not leak');
-  return values;
+  const rust = await exerciseRust(page);
+  // Only the three live example clients remain after all test instances close.
+  await Promise.all(page.workers().slice(3).map((worker) => worker.waitForEvent('close', { timeout: 15_000 })));
+  assert.equal(page.workers().length, 3, 'disposed workers must not leak');
+  return { ...values, rust };
 }, 'browser');

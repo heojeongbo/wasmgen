@@ -1,0 +1,4 @@
+[package]
+name = "offset"
+version.workspace = true
+edition.workspace = true

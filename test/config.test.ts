@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { validateConfig, readConfig } from '../src/config.js';
+import { validateConfig as validate } from '../src/config.js';
+import { readConfig } from '../src/index.js';
+import { languages } from '../src/languages.js';
+
+const validateConfig = (value: unknown, file: string) => validate(value, file, languages);
 
 const valid = () => ({ version: 1, output: './web/generated', input: [{ name: 'math', language: 'go', files: ['./math.go'], exports: { add: { symbol: 'Add', params: [{ name: 'a', type: 'f64' }], result: 'f64' } } }] });
 
@@ -29,12 +33,25 @@ const cases: Array<[string, unknown, RegExp]> = [
   ['package and files', withInput({ package: '.' }), /exactly one/],
   ['duplicate Go basenames', withInput({ files: ['./math.go', './other/math.go'] }), /duplicate Go basenames/],
   ['C++ missing declarations', withInput({ language: 'cpp' }), /requires declarations/],
+  ['Rust without a crate root', withInput({ language: 'rust', files: undefined }), /exactly one/],
+  ['Rust with multiple crate roots', withInput({ language: 'rust', files: ['lib.rs', 'other.rs'] }), /exactly one .rs/],
+  ['Rust with a non-Rust input', withInput({ language: 'rust' }), /exactly one .rs/],
+  ['Rust with C++ headers', withInput({ language: 'rust', files: ['lib.rs'], headers: ['api.h'] }), /only for C\+\+/],
+  ['Rust with package and files', withInput({ language: 'rust', files: ['lib.rs'], package: 'crate' }), /exactly one/],
+  ['code in Rust symbol', withInput({ language: 'rust', files: ['lib.rs'], exports: { add: { symbol: 'value(); panic!()', result: 'void' } } }), /invalid rust symbol/],
 ];
 for (const [name, config, message] of cases) {
   test(`rejects ${name} before invoking a compiler`, () => {
     assert.throws(() => validateConfig(config, '/project/wasmgen.yaml'), message);
   });
 }
+
+test('Rust packages support qualified symbols, fallible results and separate tool overrides', () => {
+  const config = validateConfig({ ...withInput({ language: 'rust', files: undefined, package: './crate', exports: { add: { symbol: 'math::add', result: 'f64', error: true } } }), tools: { cargo: '/tools/cargo', wasmBindgen: '/tools/wasm-bindgen' } }, '/project/wasmgen.yaml');
+  assert.equal(config.input[0]?.package, '/project/crate');
+  assert.equal(config.input[0]?.exports[0]?.error, true);
+  assert.equal(config.tools.cargo, '/tools/cargo');
+});
 
 test('YAML duplicate keys fail instead of silently replacing configuration', async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'wasmgen-config-'));

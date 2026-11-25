@@ -17,6 +17,18 @@ toolchain tested by this project:
 
 Source: https://github.com/emscripten-core/emscripten/tree/4.0.10
 
+`RUST-LICENSE-MIT`, `RUST-LICENSE-APACHE`, and `RUST-COPYRIGHT` are copied
+unchanged from Rust 1.100.0 (`LICENSE-MIT`, `LICENSE-APACHE`, `COPYRIGHT`):
+https://github.com/rust-lang/rust/tree/1.100.0
+
+`WASM-BINDGEN-LICENSE-MIT` and `WASM-BINDGEN-LICENSE-APACHE` are copied unchanged
+from wasm-bindgen 0.2.130 (`LICENSE-MIT`, `LICENSE-APACHE`):
+https://github.com/wasm-bindgen/wasm-bindgen/tree/0.2.130
+
+The Rust adapter copies these tested-toolchain notices into generated modules.
+Native Cargo dependencies may require additional notices; these files are not
+a complete license inventory of arbitrary user crates.
+
 Generated modules carry these notices. Application distributors must also
 include notices for their native sources and any additional dependencies,
 and check notices when using another compiler version. Web bundlers do not

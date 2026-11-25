@@ -1,5 +1,6 @@
 import type { ResolvedInput } from '../../model/config.js';
-import type { BuildContext, CompilerAdapter } from '../compiler.js';
+import type { BuildContext, CompiledModule, LanguageAdapter } from '../../ports/language.js';
+import { validateInput } from './config.js';
 import { goBridge } from './bridge.js';
 import { workerSource } from './worker.js';
 import { z } from 'zod';
@@ -8,7 +9,7 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promi
 import path from 'node:path';
 import { run } from '../../process.js';
 
-async function build(mod: ResolvedInput, { directory, scratch, tools, signal }: BuildContext): Promise<void> {
+async function build(mod: ResolvedInput, { directory, scratch, tools, signal }: BuildContext): Promise<CompiledModule> {
   const go = tools.go ?? 'go';
   const env = { ...process.env, GOOS: 'js', GOARCH: 'wasm', CGO_ENABLED: '0', ...(mod.package ? {} : { GOWORK: 'off' }) };
   let buildRoot = scratch;
@@ -48,6 +49,7 @@ async function build(mod: ResolvedInput, { directory, scratch, tools, signal }: 
   } finally {
     if (externalBuild) await rm(externalBuild, { recursive: true, force: true });
   }
+  return { workerSource: workerSource() };
 }
 
-export const goAdapter: CompilerAdapter = { language: 'go', build, workerSource };
+export const goAdapter: LanguageAdapter<'go'> = { language: 'go', validateInput, build };

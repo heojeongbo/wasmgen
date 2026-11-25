@@ -1,0 +1,10 @@
+[package]
+name = "fixture-calc"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "renamed_calc"
+
+[dependencies]
+offset.workspace = true

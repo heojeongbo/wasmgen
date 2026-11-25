@@ -1,12 +1,11 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import type { CompilerAdapters } from '../adapters/compiler.js';
-import { readConfig } from '../config.js';
+import type { ConfigReader, LanguageCompilers } from '../ports/language.js';
 import { writeBarrel, writeShared, writeWeb } from '../codegen/web.js';
 import { withOutput } from '../storage/output.js';
 
 export interface GenerateOptions { signal?: AbortSignal; onProgress?: (message: string) => void }
-export function createGenerator(adapters: CompilerAdapters) {
+export function createGenerator(adapters: LanguageCompilers, readConfig: ConfigReader) {
   return async (configPath: string, options: GenerateOptions = {}): Promise<{ output: string; modules: string[] }> => {
     const config = await readConfig(configPath);
     await withOutput(config.output, async (staging, result) => {
@@ -21,8 +20,8 @@ export function createGenerator(adapters: CompilerAdapters) {
         await mkdir(directory);
         await mkdir(scratch);
         const adapter = adapters[mod.language];
-        await adapter.build(mod, { directory, scratch, tools: config.tools, signal: options.signal });
-        await writeWeb(mod, directory, adapter);
+        const compiled = await adapter.build(mod, { directory, scratch, tools: config.tools, signal: options.signal });
+        await writeWeb(mod, directory, compiled.workerSource);
       }
       await writeBarrel(config.input, result);
     }, options.signal);

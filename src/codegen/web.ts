@@ -1,6 +1,5 @@
 import type { ResolvedInput } from '../model/config.js';
 import type { ResultType } from '../model/value-types.js';
-import type { CompilerAdapter } from '../adapters/compiler.js';
 import { copyFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -15,7 +14,7 @@ export async function writeShared(output: string) {
   await copyFile(new URL('../runtime/worker.js', import.meta.url), path.join(output, 'worker-runtime.js'));
   await copyFile(new URL('../runtime/protocol.js', import.meta.url), path.join(output, 'protocol.js'));
 }
-export async function writeWeb(mod: ResolvedInput, directory: string, adapter: CompilerAdapter) {
+export async function writeWeb(mod: ResolvedInput, directory: string, initialize: string) {
   const methods = mod.exports.map((fn) => `    ${fn.name}: (...args) => client.call(${JSON.stringify(fn.name)}, args),`).join('\n');
   await writeFile(path.join(directory, 'index.js'), `${banner}import { connect } from '../client.js';
 export async function create(options = {}) {
@@ -41,7 +40,6 @@ ${signatures}
 export declare function create(options?: Options): Promise<API>;
 `);
   const schema = Object.fromEntries(mod.exports.map(({ name, params, result }) => [name, { params, result }]));
-  const initialize = adapter.workerSource();
   await writeFile(path.join(directory, 'worker.js'), `${banner}import { serve } from '../worker-runtime.js';\nconst schema = ${JSON.stringify(schema)};\n${initialize}\n`);
 }
 export async function writeBarrel(modules: ResolvedInput[], output: string) {

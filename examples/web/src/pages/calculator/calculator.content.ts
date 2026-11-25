@@ -1,1 +1,1 @@
-export const content = { ready: 'Both WebAssembly workers are ready' };
+export const content = { ready: 'C++, Go and Rust WebAssembly workers are ready' };

@@ -20,8 +20,15 @@ for (const filename of sources) {
     if (node.kind === ts.SyntaxKind.AnyKeyword) failures.push(`${filename}: explicit any is not allowed`);
     if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
       const specifier = node.moduleSpecifier.text;
-      if (filename.startsWith('src/application/') || filename.startsWith('src/codegen/')) {
-        if (/adapters\/(?:go|cpp)\//.test(specifier)) failures.push(`${filename}: concrete compiler belongs in the composition root`);
+      if (filename.startsWith('src/application/') || filename.startsWith('src/codegen/') || filename === 'src/config.ts') {
+        if (/adapters\//.test(specifier) || /languages\.js$/.test(specifier)) failures.push(`${filename}: concrete language integrations belong in the composition root`);
+      }
+      if (filename.startsWith('src/codegen/') && /ports\//.test(specifier)) failures.push(`${filename}: web codegen must not depend on a compiler port`);
+      if (filename.startsWith('src/ports/') && !specifier.startsWith('../model/')) failures.push(`${filename}: ports must depend only on the model`);
+      if (filename.startsWith('src/adapters/') && specifier.startsWith('.')) {
+        const owner = filename.split('/')[2];
+        const target = path.relative(path.resolve('src/adapters'), path.resolve(path.dirname(filename), specifier));
+        if (!target.startsWith('..') && target.split(path.sep)[0] !== owner) failures.push(`${filename}: language adapters must not depend on each other`);
       }
       if (filename.startsWith('src/runtime/') && !specifier.startsWith('./') && specifier !== '../model/value-types.js') failures.push(`${filename}: browser runtime depends on build-time code`);
       if (filename.startsWith('src/model/') && specifier.startsWith('.') && !specifier.startsWith('./')) failures.push(`${filename}: model depends on an outer layer`);

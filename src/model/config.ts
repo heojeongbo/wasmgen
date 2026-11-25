@@ -9,16 +9,17 @@ const valueType = z.enum(valueTypes);
 const parameter = z.strictObject({ name: identifier, type: valueType });
 const fn = z.strictObject({ symbol: text.optional(), params: z.array(parameter).default([]), result: z.enum([...valueTypes, 'void']), error: z.boolean().optional() });
 const input = z.strictObject({
-  name: exportName, language: z.enum(['go', 'cpp']), files: z.array(text).min(1).optional(),
+  name: exportName, language: z.enum(['go', 'cpp', 'rust']), files: z.array(text).min(1).optional(),
   headers: z.array(text).optional(), include: z.array(text).optional(), package: text.optional(),
   exports: z.record(exportName, fn).refine((value) => Object.keys(value).length > 0, 'expected at least one function'),
 });
 export const configSchema = z.strictObject({
   version: z.literal(1), output: text, input: z.array(input).min(1),
-  tools: z.strictObject({ go: text.optional(), cpp: text.optional() }).default({}),
+  tools: z.strictObject({ go: text.optional(), cpp: text.optional(), cargo: text.optional(), wasmBindgen: text.optional() }).default({}),
 });
 export type Config = z.input<typeof configSchema>;
 export type InputConfig = z.input<typeof input>;
+export type ParsedInput = z.output<typeof input>;
 export type FunctionConfig = z.input<typeof fn>;
 export type Language = InputConfig['language'];
 export type Tools = z.output<typeof configSchema>['tools'];
