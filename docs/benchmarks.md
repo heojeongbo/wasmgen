@@ -100,3 +100,23 @@ change and examine raw samples and ranges. There is deliberately no timing-based
 pass/fail threshold in CI; correctness tests and benchmarks serve different purposes.
 The quick profile uses 1 repeated build, 2 startup samples, 5 warmup calls and
 3 batches of 5 calls, and must not be compared with a full baseline.
+
+## Recorded baseline
+
+The [full results](benchmark-results.md) and [raw JSON samples](benchmark-results.json)
+were recorded on 2026-11-25 using the default profile and all three engines.
+The report identifies the exact source revision and confirms a clean working tree;
+the benchmark was run without concurrent build/test suites. The Linux arm64
+container exposed 12 logical CPUs and 11.7 GiB RAM on an Apple M4 Pro host with
+48 GiB RAM. The container's CPU model was unavailable through Node's OS API and
+is recorded as `unknown`; the host model was checked separately with `sysctl`.
+
+The tables cover 9 language/engine combinations and 36 RPC cases. Sampling order
+is fixed: Chromium, Firefox, WebKit; Go, C++, Rust; scalar, then ascending array
+lengths. This initial snapshot is an observation, not a stable performance target.
+
+To refresh the baseline, run the full command from a clean, committed source
+revision, inspect the successful report, then copy that run's `results.md` and
+`results.json` to `docs/benchmark-results.md` and `docs/benchmark-results.json`.
+Update the README excerpt and environment/date description together. Keep the
+methodology document separate from generated result tables.

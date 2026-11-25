@@ -22,10 +22,10 @@ await run('pnpm', ['pack', '--out', tarball]);
 // Inspect the archive itself: lifecycle output is not a stable JSON channel.
 const packed = { filename: tarball, files: (await run('tar', ['-tzf', tarball])).split('\n').filter((file) => !file.endsWith('/')).map((file) => ({ path: file.replace(/^package\//, '') })) };
 for (const { path: file } of packed.files) {
-  assert(file.startsWith('dist/') || ['package.json', 'README.md', 'CHANGELOG.md', 'docs/configuration.md', 'docs/troubleshooting.md', 'docs/benchmarks.md', 'LICENSE'].includes(file), `unexpected public package file: ${file}`);
+  assert(file.startsWith('dist/') || ['package.json', 'README.md', 'CHANGELOG.md', 'docs/configuration.md', 'docs/troubleshooting.md', 'docs/benchmarks.md', 'docs/benchmark-results.md', 'docs/benchmark-results.json', 'LICENSE'].includes(file), `unexpected public package file: ${file}`);
 }
 assert(packed.files.some((file) => file.path === 'README.md'), 'package must include usage documentation');
-for (const file of ['CHANGELOG.md', 'docs/configuration.md', 'docs/troubleshooting.md', 'docs/benchmarks.md']) {
+for (const file of ['CHANGELOG.md', 'docs/configuration.md', 'docs/troubleshooting.md', 'docs/benchmarks.md', 'docs/benchmark-results.md', 'docs/benchmark-results.json']) {
   assert(packed.files.some((entry) => entry.path === file), `package must include ${file}`);
 }
 const consumer = path.resolve('.test-output/consumer');

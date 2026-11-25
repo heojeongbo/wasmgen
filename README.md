@@ -508,6 +508,20 @@ See [benchmark methodology and commands](docs/benchmarks.md) for timing boundari
 cache conditions and interpretation. Browser round trips include validation and
 data copying; they are not native-language speed rankings.
 
+The [recorded baseline](docs/benchmark-results.md) (2026-11-25, Linux arm64 container,
+Chromium 148, full profile) has these median round-trip values:
+
+| Fixture | Initialization (ms) | Scalar divide (ms/call) | Scale 1,024 numbers (ms/call) |
+| --- | ---: | ---: | ---: |
+| Go | 35.000 | 0.124 | 0.724 |
+| C++ | 9.100 | 0.060 | 0.444 |
+| Rust | 8.400 | 0.052 | 0.188 |
+
+Repeated generation of all three modules had a 6.095-second median with existing
+toolchain caches. See the full tables and [raw samples](docs/benchmark-results.json)
+for the other engines, payload sizes and observed variation. These are fixture
+measurements from one environment, not application latency guarantees.
+
 ## Maintainer credentials
 
 The project `.npmrc` uses the public npm registry and reads authentication from
