@@ -15,15 +15,29 @@ wasmgen orchestrates existing compilers and generates the bindings. Each client
 runs in its own Web Worker and exposes Promise-returning functions. Generated
 code has no runtime npm dependency on wasmgen and contacts no build service.
 
-The project and CLI are named **wasmgen**. The package is configured as
-`@heojeongbo/wasmgen`; it has **not been published to npm**. Rust support is not
-implemented in this version.
+The project and CLI are named **wasmgen**. The npm package is
+`@heojeongbo/wasmgen`. Rust support is not implemented in this version.
 
-## Try it before publishing
+## Install
 
 Build prerequisites: Node.js 22.12+, pnpm 10.11.0, Go 1.22+, and Emscripten's `em++` on
 `PATH`. C++ uses C++17. The [test container](test/Dockerfile) supplies the tested
 toolchains and browser engines if you do not want to install them locally.
+
+```sh
+pnpm add -D @heojeongbo/wasmgen
+```
+
+Create a `wasmgen.yaml` using the configuration below, then generate the browser
+modules:
+
+```sh
+pnpm exec wasmgen gen --config wasmgen.yaml
+```
+
+## Run the repository example
+
+Clone this repository and run:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -40,7 +54,7 @@ pnpm exec vite build examples/web --base=/demo/
 pnpm exec vite preview examples/web --base=/demo/
 ```
 
-To install the unpublished generator into another project, run `pnpm pack` here,
+To test a local build of the generator in another project, run `pnpm pack` here,
 then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.1.0.tgz`
 there. This does not publish anything. Its runtime npm dependencies are the
 public `yaml` and `zod` packages. Installation has no install/postinstall scripts
@@ -201,9 +215,9 @@ Rust, and WASI are outside its supported interface.
 
 ## Build and deploy in a monorepo
 
-Install the public generator as a dev dependency (or use its local tarball for
-now), generate from your local native sources, and build the web application.
-Native application code and generated artifacts do not need an pnpm package or
+Install the public generator as a dev dependency, generate from your local native
+sources, and build the web application.
+Native application code and generated artifacts do not need a pnpm package or
 an internal package registry. Generation happens explicitly during development
 or CI, not during `pnpm install`.
 
@@ -304,7 +318,7 @@ It checks Unicode, numeric boundaries, arrays and memory growth, errors/panics,
 concurrency, goroutine/channel/timer completion, call ordering, responsiveness,
 cancellation, timeout, and Worker cleanup.
 
-`test:package` packs and installs the unpublished tarball into a separate
+`test:package` packs and installs a local tarball into a separate
 consumer, invokes the installed CLI/library, compiles a Go `internal` package
 with a local `replace` dependency and a C++ module, typechecks imports, and runs
 the same browser/build matrix. Only public generator files enter the package.
