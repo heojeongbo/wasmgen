@@ -106,6 +106,12 @@ a browser runtime or a CommonJS `require` entry point.
 - `options.signal?: AbortSignal` cancels generation and active compiler execution;
   cancellation before replacement preserves previous output.
 
+On POSIX hosts, cancellation also stops compiler descendants in the runner's
+process group. SIGTERM is followed by SIGKILL after one second if necessary.
+Windows uses direct child termination; descendant cleanup there is not covered
+by the supported test matrix. This build-process cancellation is separate from
+browser Worker termination.
+
 The generated browser factory has different options: `signal` owns the lifetime
 of the entire client and `timeoutMs` applies to initialization and each call,
 including queue time. See [browser client usage](../README.md#import-from-typescript).

@@ -66,7 +66,7 @@ pnpm exec vite preview examples/web --base=/demo/
 ```
 
 To test a local build of the generator in another project, run `pnpm pack` here,
-then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.2.0.tgz`
+then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.2.1.tgz`
 there. This does not publish anything. Its runtime npm dependencies are the
 public `yaml`, `zod`, and `smol-toml` packages. Installation has no install/postinstall scripts
 or native builds; `prepack` compiles TypeScript when packaging the generator.
@@ -426,7 +426,9 @@ created clients and disposes them in reverse order, including partial initializa
 application/configuration/codegen cannot import concrete language adapters;
 adapters cannot import one another; ports depend on the model; runtime code cannot import
 build-time services, and FSD imports must flow downward through public entry points.
-It also rejects explicit TypeScript `any` and disabled type-checking directives.
+It also rejects explicit TypeScript `any`, disabled type-checking directives,
+and maintained `.js`/`.mjs`/`.cjs` files in source, script and test directories.
+Executable JavaScript is emitted into generated output directories.
 `pnpm run typecheck:generated` validates the generated declarations and browser
 example after generation; test compilation checks all test code too.
 

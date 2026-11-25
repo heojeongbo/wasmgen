@@ -17,6 +17,7 @@ when reporting a failure; include a minimal input/config and tool versions.
 | Rust package is rejected | Select the library crate directory, not the workspace root or a binary-only package. |
 | Cargo override does not take effect | Put `[patch]` or `[replace]` at the original workspace root. Check package name/version constraints; a patch still follows Cargo's version selection. |
 | C++ warning stops the build | This integration uses C++17 with warnings treated as errors. Fix the native warning; arbitrary compiler-flag overrides are not supported. |
+| `stdout exceeded 32 MiB` | The tool produced more machine-readable output than the runner can capture. Verify the selected executable and workspace size. wasmgen fails explicitly rather than parsing or using a truncated result. |
 
 The tested toolchain versions and Docker commands are in
 [Validation](../README.md#validation). Tests run on Linux in that container;
@@ -50,9 +51,9 @@ The current checkout sets Emscripten's
 [`DYNAMIC_EXECUTION=0`](https://emscripten.org/docs/tools_reference/settings_reference.html#dynamic-execution)
 to avoid `eval`/`new Function` in its C++ glue. This disables Emscripten features
 that require dynamic JavaScript execution and can use slower binding paths.
-Published `0.2.0` C++ output predates this change; see the
-[unreleased fixes](../CHANGELOG.md#unreleased) and regenerate with a version
-containing the fix. Updating the npm generator alone does not change existing
+Published `0.2.0` C++ output predates this change; upgrade to `0.2.1` or later
+and regenerate the browser modules. See the [changelog](../CHANGELOG.md).
+Updating the npm generator alone does not change existing
 generated files. Go and Rust use their own generated runtimes.
 
 The project tests Chromium, Firefox and WebKit from the pinned Playwright image,

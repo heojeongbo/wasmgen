@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1
 
 ### Fixed
 
@@ -10,6 +10,17 @@
   browser tests enforce a CSP permitting Wasm compilation without `unsafe-eval`.
 - Config validation rejects output that contains a declared input or the config
   through symlinked files or parent directories.
+- Compiler stdout/stderr preserve split UTF-8 sequences and significant path
+  whitespace. Large metadata is captured intact; stdout exceeding 32 MiB fails
+  explicitly instead of returning truncated data. Pre-aborted calls do not spawn
+  compiler processes.
+- Cancellation terminates the compiler process group on POSIX hosts, including
+  descendants. Compilers that ignore SIGTERM are force-stopped after one second.
+
+### Maintenance
+
+- Added an architecture check requiring maintained JavaScript code to be TypeScript;
+  generated browser JavaScript remains in output directories.
 
 ### Documentation
 

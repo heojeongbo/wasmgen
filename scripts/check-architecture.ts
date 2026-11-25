@@ -5,13 +5,17 @@ import ts from 'typescript';
 async function files(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
   const nested = await Promise.all(entries.map((entry) => entry.isDirectory() ? files(path.join(directory, entry.name)) : Promise.resolve([path.join(directory, entry.name)])));
-  return nested.flat().filter((file) => file.endsWith('.ts'));
+  return nested.flat();
 }
 
 const failures: string[] = [];
 const rank: Record<string, number> = { app: 4, pages: 3, features: 2, shared: 1 };
 const web = path.resolve('examples/web/src');
-const sources = [...await files('src'), ...await files('examples/web/src'), ...await files('scripts'), ...await files('test')];
+const maintained = [...await files('src'), ...await files('examples/web/src'), ...await files('scripts'), ...await files('test')];
+for (const filename of maintained) {
+  if (/\.(?:c|m)?js$/.test(filename)) failures.push(`${filename}: maintained JavaScript must be TypeScript; generated JavaScript belongs in output directories`);
+}
+const sources = maintained.filter((file) => file.endsWith('.ts'));
 for (const filename of sources) {
   const source = await readFile(filename, 'utf8');
   const ast = ts.createSourceFile(filename, source, ts.ScriptTarget.Latest, true);
