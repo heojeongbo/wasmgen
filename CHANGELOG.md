@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Added a TypeScript benchmark harness for CLI generation, generated module sizes,
+  browser initialization and sequential scalar/array Worker round trips across
+  Go, C++ and Rust in Chromium, Firefox and WebKit.
+- Added full/quick sampling profiles, raw JSON and Markdown reports, and documented
+  measurement boundaries and reproducibility limits.
+
 ## 0.2.2
 
 - Added `--version` / `-v` and expanded CLI help with commands and examples.

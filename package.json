@@ -33,9 +33,11 @@
   },
   "scripts": {
     "build": "tsx scripts/build.ts",
-    "check": "pnpm run typecheck && pnpm run architecture:check",
+    "check": "pnpm run typecheck && pnpm run typecheck:bench && pnpm run architecture:check",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "typecheck:generated": "tsc --noEmit -p test/types/tsconfig.json",
+    "typecheck:bench": "tsc -p benchmarks/tsconfig.json",
+    "bench": "pnpm run build && tsx benchmarks/run.ts",
     "architecture:check": "tsx scripts/check-architecture.ts",
     "test:compile": "tsc -p test/tsconfig.json",
     "test": "pnpm run build && pnpm run test:compile && node --test .test-build/test/*.test.js",

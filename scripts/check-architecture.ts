@@ -11,7 +11,7 @@ async function files(directory: string): Promise<string[]> {
 const failures: string[] = [];
 const rank: Record<string, number> = { app: 4, pages: 3, features: 2, shared: 1 };
 const web = path.resolve('examples/web/src');
-const maintained = [...await files('src'), ...await files('examples/web/src'), ...await files('scripts'), ...await files('test')];
+const maintained = [...await files('src'), ...await files('examples/web/src'), ...await files('scripts'), ...await files('test'), ...await files('benchmarks')];
 for (const filename of maintained) {
   if (/\.(?:c|m)?js$/.test(filename)) failures.push(`${filename}: maintained JavaScript must be TypeScript; generated JavaScript belongs in output directories`);
 }

@@ -496,6 +496,18 @@ All checked-in fixtures are independent, general-purpose examples. No external
 application checkout is required. Reports, screenshots, and the local tarball are written to
 `.artifacts/`; temporary consumers go under `.test-output/`. Both are gitignored.
 
+## Benchmarks
+
+Run `pnpm bench` from a checkout with the [test toolchains](#validation) installed.
+It measures full CLI generation, module sizes, Worker initialization, and scalar/array
+round trips through real Go/C++/Rust Wasm in Chromium, Firefox and WebKit.
+`pnpm bench --quick --browser chromium` provides a shorter harness smoke run.
+
+Each run writes JSON raw samples and Markdown tables to `.artifacts/benchmarks/`.
+See [benchmark methodology and commands](docs/benchmarks.md) for timing boundaries,
+cache conditions and interpretation. Browser round trips include validation and
+data copying; they are not native-language speed rankings.
+
 ## Maintainer credentials
 
 The project `.npmrc` uses the public npm registry and reads authentication from

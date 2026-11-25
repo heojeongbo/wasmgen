@@ -18,6 +18,7 @@ Emscripten, Rust, wasm-bindgen and browser versions. Install dependencies with
 | Native adapters, generated code or browser lifecycle | The above, plus `pnpm run test:e2e`. |
 | Packaging, public exports, dependencies or installed-user behavior | The above, plus `pnpm run test:package`. |
 | Documentation | Check relative links and verify commands/API descriptions against the implementation; run applicable commands when they change. |
+| Benchmark harness or performance-sensitive changes | The applicable checks above, plus `pnpm bench --quick --browser chromium`; use `pnpm bench` for recorded performance comparisons. |
 
 Run suites sequentially: they share `dist/`, generated examples and test output.
 `test:e2e` generates examples before checking their declarations. `test:package`
@@ -25,6 +26,9 @@ builds and installs a real tarball into an isolated consumer and verifies all
 three languages. Both browser suites use Chromium, Firefox and WebKit in
 development and production. Production responses include the tested CSP.
 Reports and screenshots appear in `.artifacts/`; they are not source files.
+Benchmark code lives in `benchmarks/` and is covered by the strict TypeScript and
+architecture checks. See [benchmark methodology](docs/benchmarks.md) before recording
+results; run it separately from other validation to avoid measurement contention.
 
 ## Extending the implementation
 
