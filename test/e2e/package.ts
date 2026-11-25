@@ -6,9 +6,10 @@ import { runBrowsers } from './browser.js';
 import { nativeSnapshot } from './native-snapshot.js';
 
 interface AddClient { add(value: number): Promise<number>; dispose(): void }
+type Clamp = (value: number, low: number, high: number) => Promise<number>;
 type PackageGlobals = typeof globalThis & { __wasmgenTest: {
   calc: () => Promise<AddClient>;
-  geometry: () => Promise<{ clamp(value: number, low: number, high: number): Promise<number>; dispose(): void }>;
+  geometry: () => Promise<{ clamp: Clamp; hasOwnProperty: Clamp; calledRun: Clamp; locateFile: Clamp; dispose(): void }>;
   rustCalc: () => Promise<AddClient>;
   rustPatch: () => Promise<AddClient>;
   rustReplace: () => Promise<AddClient>;
@@ -21,9 +22,12 @@ await run('pnpm', ['pack', '--out', tarball]);
 // Inspect the archive itself: lifecycle output is not a stable JSON channel.
 const packed = { filename: tarball, files: (await run('tar', ['-tzf', tarball])).split('\n').filter((file) => !file.endsWith('/')).map((file) => ({ path: file.replace(/^package\//, '') })) };
 for (const { path: file } of packed.files) {
-  assert(file.startsWith('dist/') || ['package.json', 'README.md', 'LICENSE'].includes(file), `unexpected public package file: ${file}`);
+  assert(file.startsWith('dist/') || ['package.json', 'README.md', 'CHANGELOG.md', 'docs/configuration.md', 'docs/troubleshooting.md', 'LICENSE'].includes(file), `unexpected public package file: ${file}`);
 }
 assert(packed.files.some((file) => file.path === 'README.md'), 'package must include usage documentation');
+for (const file of ['CHANGELOG.md', 'docs/configuration.md', 'docs/troubleshooting.md']) {
+  assert(packed.files.some((entry) => entry.path === file), `package must include ${file}`);
+}
 const consumer = path.resolve('.test-output/consumer');
 await rm(consumer, { recursive: true, force: true });
 await mkdir(consumer, { recursive: true });
@@ -41,7 +45,10 @@ await writeFile(path.join(consumer, 'wasmgen.json'), JSON.stringify({
       add: { symbol: 'Add', params: [{ name: 'value', type: 'f64' }], result: 'f64' },
     } },
     { name: 'previous', language: 'cpp', files: ['./native/cpp/geometry.cc'], headers: ['./native/cpp/geometry.h'], exports: {
-      clamp: { symbol: 'geometry::Clamp', params: ['value', 'low', 'high'].map((name) => ({ name, type: 'f64' })), result: 'f64' },
+      // Public API names must not overwrite Emscripten's runtime properties.
+      ...Object.fromEntries(['clamp', 'hasOwnProperty', 'calledRun', 'locateFile'].map((name) => [name, {
+        symbol: 'geometry::Clamp', params: ['value', 'low', 'high'].map((name) => ({ name, type: 'f64' })), result: 'f64',
+      }])),
     } },
     { name: 'rustCalc', language: 'rust', package: './native/rust-workspace/calc', exports: {
       add: { symbol: 'arithmetic::add', params: [{ name: 'value', type: 'f64' }], result: 'f64' },
@@ -104,14 +111,14 @@ await runBrowsers(root, async (page) => {
     const patched = await rustPatch();
     const replaced = await rustReplace();
     try {
-      const values = { goInternalWithReplace: await go.add(35), cpp: await cpp.clamp(42, 0, 10), rustWorkspaceDependency: await rust.add(35), rustRootPatch: await patched.add(35), rustRootReplace: await replaced.add(35) };
+      const values = { goInternalWithReplace: await go.add(35), cpp: await cpp.clamp(42, 0, 10), cppRuntimeNames: await Promise.all([cpp.hasOwnProperty(42, 0, 10), cpp.calledRun(42, 0, 10), cpp.locateFile(42, 0, 10)]), rustWorkspaceDependency: await rust.add(35), rustRootPatch: await patched.add(35), rustRootReplace: await replaced.add(35) };
       const result = document.querySelector('#result');
       if (!result) throw new Error('result element is missing');
       result.textContent = JSON.stringify(values, null, 2);
       return values;
     } finally { go.dispose(); cpp.dispose(); rust.dispose(); patched.dispose(); replaced.dispose(); }
   });
-  assert.deepEqual(results, { goInternalWithReplace: 42, cpp: 10, rustWorkspaceDependency: 42, rustRootPatch: 42, rustRootReplace: 84 });
+  assert.deepEqual(results, { goInternalWithReplace: 42, cpp: 10, cppRuntimeNames: [10, 10, 10], rustWorkspaceDependency: 42, rustRootPatch: 42, rustRootReplace: 84 });
   return results;
 }, 'package');
 await writeFile(path.join(artifacts, 'package-contents.json'), JSON.stringify(packed, null, 2) + '\n');

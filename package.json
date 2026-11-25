@@ -16,6 +16,8 @@
   "files": [
     "dist",
     "README.md",
+    "CHANGELOG.md",
+    "docs",
     "LICENSE"
   ],
   "engines": {

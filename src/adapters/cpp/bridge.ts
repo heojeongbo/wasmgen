@@ -51,7 +51,7 @@ using emscripten::val;
 ${functions}
 }
 EMSCRIPTEN_BINDINGS(wasmgen_module) {
-${mod.exports.map((fn, index) => `  emscripten::function(${JSON.stringify(fn.name)}, &call_${index});`).join('\n')}
+${mod.exports.map((_, index) => `  emscripten::function("wasmgen_call_${index}", &call_${index});`).join('\n')}
 }
 `;
 }

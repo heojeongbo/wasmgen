@@ -24,7 +24,7 @@ async function build(mod: ResolvedInput, { directory, scratch, tools, signal }: 
     ...objects, '-O3', '-flto', '-fexceptions', '-lembind', '--no-entry',
     '-sSTRICT', '-sEXPORT_ES6', '-sENVIRONMENT=worker',
     '-sINCOMING_MODULE_JS_API=locateFile',
-    '-sALLOW_MEMORY_GROWTH', '-sFILESYSTEM=0',
+    '-sALLOW_MEMORY_GROWTH', '-sFILESYSTEM=0', '-sDYNAMIC_EXECUTION=0',
     '-o', path.join(directory, 'native.js'),
   ], { signal });
   const licenses = path.join(directory, 'licenses');
@@ -32,7 +32,7 @@ async function build(mod: ResolvedInput, { directory, scratch, tools, signal }: 
   for (const name of ['EMSCRIPTEN-LICENSE', 'MUSL-COPYRIGHT', 'LIBCXX-LICENSE', 'LIBCXXABI-LICENSE', 'COMPILER-RT-LICENSE']) {
     await copyFile(new URL(`../../licenses/${name}`, import.meta.url), path.join(licenses, name));
   }
-  return { workerSource: workerSource() };
+  return { workerSource: workerSource(mod) };
 }
 
 export const cppAdapter: LanguageAdapter<'cpp'> = { language: 'cpp', validateInput, build };

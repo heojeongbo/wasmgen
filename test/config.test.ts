@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { validateConfig as validate } from '../src/config.js';
@@ -60,4 +60,42 @@ test('YAML duplicate keys fail instead of silently replacing configuration', asy
     await writeFile(file, 'version: 1\nversion: 2\n');
     await assert.rejects(readConfig(file), /invalid config/);
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+for (const redirect of ['input', 'output-parent', 'config'] as const) {
+  test(`rejects output containing an input through a ${redirect} symlink`, async (t) => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'wasmgen-path-'));
+    t.after(() => rm(dir, { recursive: true, force: true }));
+    const output = path.join(dir, 'generated');
+    await mkdir(output);
+    await writeFile(path.join(output, 'source.go'), 'package sample\nfunc Value() float64 { return 1 }\n');
+    let source = './generated/source.go';
+    let destination = './generated';
+    let configFile = path.join(dir, 'config.json');
+    if (redirect === 'input') {
+      await symlink(path.join(output, 'source.go'), path.join(dir, 'source.go'));
+      source = './source.go';
+    } else if (redirect === 'output-parent') {
+      await symlink(dir, path.join(dir, 'alias'), 'dir');
+      destination = './alias/generated';
+    } else {
+      await writeFile(path.join(dir, 'source.go'), 'package sample\n');
+      source = './source.go';
+      configFile = path.join(output, 'config.json');
+      await symlink(configFile, path.join(dir, 'config.json'));
+    }
+    await writeFile(configFile, JSON.stringify({ ...valid(), output: destination, input: [{ ...valid().input[0], files: [source] }] }));
+    await assert.rejects(readConfig(path.join(dir, 'config.json')), /must not contain input/);
+  });
+}
+
+test('accepts an output beneath a symlinked parent when inputs stay outside it', async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'wasmgen-path-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await mkdir(path.join(dir, 'web'));
+  await symlink(path.join(dir, 'web'), path.join(dir, 'alias'), 'dir');
+  await writeFile(path.join(dir, 'math.go'), 'package sample\n');
+  const file = path.join(dir, 'config.json');
+  await writeFile(file, JSON.stringify({ ...valid(), output: './alias/nested/generated' }));
+  assert.equal((await readConfig(file)).output, path.join(dir, 'alias/nested/generated'));
 });

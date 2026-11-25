@@ -19,11 +19,20 @@ The project and CLI are named **wasmgen**. The npm package is
 `@heojeongbo/wasmgen`. Rust support, including Cargo workspace dependency
 overrides, is available starting with `0.2.0`.
 
+This README describes the current checkout. See the [changelog](CHANGELOG.md)
+for released changes and work that is still unreleased.
+
+- [Configuration reference](docs/configuration.md): fields, defaults, CLI and library API.
+- [Troubleshooting](docs/troubleshooting.md): toolchains, browser loading, CSP and output recovery.
+- [Contributing](CONTRIBUTING.md): validation, adapter boundaries and release checks.
+
 ## Install
 
-Build prerequisites: Node.js 22.12+, pnpm 10.11.0, and the toolchain for each
+The generator requires Node.js 22+ and the toolchain for each
 configured language: Go 1.22+, Emscripten's `em++` (C++17), or Rust/Cargo with the
 `wasm32-unknown-unknown` target and `wasm-bindgen` CLI on `PATH`.
+The repository's Vite example and tests require Node.js 22.12+; contributors use
+pnpm 10.11.0. Browser consumers need the generated assets, not these build tools.
 The [test container](test/Dockerfile) supplies all tested toolchains and browsers.
 
 ```sh
@@ -100,13 +109,18 @@ pnpm exec wasmgen check --config wasmgen.yaml
 pnpm exec wasmgen gen --config wasmgen.yaml
 ```
 
-`check` validates the configuration and input paths; `gen` also compiles and
-checks native calls. All source/output paths resolve relative to the config.
+`check` validates the configuration and input paths without invoking a compiler.
+It does not verify native signatures, compiler availability or dependency resolution;
+`gen` checks signatures during compilation. Neither command executes exported native
+functions in a browser. All source/output paths resolve relative to the config.
 The output is exclusively owned by wasmgen: use a dedicated generated directory.
 Failed builds preserve the previous output. Unknown files and symlinks in the
 output prevent replacement. Do not hand-edit generated files. A sibling lock
 prevents concurrent generation into the same output; after a hard process kill,
 remove that lock only after verifying no generator is still running.
+The config and declared inputs must stay outside the output, including through
+symlinked files or parent directories. Do not move inputs or retarget symlinks while
+generation is running.
 
 ## Import from TypeScript
 
@@ -307,6 +321,21 @@ Native application code and generated artifacts do not need a pnpm package or
 an internal package registry. Generation happens explicitly during development
 or CI, not during `pnpm install`.
 
+For example, in the web application's `package.json`:
+
+```json
+{
+  "scripts": {
+    "gen:wasm": "wasmgen gen --config wasmgen.yaml",
+    "build": "pnpm run gen:wasm && vite build"
+  }
+}
+```
+
+Run generation after changing native code or the config; no watch mode is provided.
+Use trusted native inputs and dependencies: compiler tools and Cargo build scripts
+run on the build machine. wasmgen is not a sandbox for building untrusted code.
+
 The generated directory contains module factories, `.d.ts` declarations,
 Workers, `.wasm` binaries, and runtime/license files. Vite is tested in both
 development and production, including a `/demo/` base path. Its normal
@@ -318,6 +347,10 @@ Deploy the entire bundler output. Serve `.wasm` as `application/wasm` and keep
 Worker scripts/assets accessible from the application. The current implementation
 does not use SharedArrayBuffer or require cross-origin isolation. A restrictive
 CSP must allow the application's Workers and WebAssembly compilation.
+The current C++ adapter disables Emscripten dynamic JavaScript execution;
+the production browser matrix runs without CSP `unsafe-eval`. Apply the policy to
+Worker script responses too. See [CSP and loading issues](docs/troubleshooting.md#browser-loading-and-csp)
+for the tested policy and compatibility notes.
 
 Preserve generated license notices in your application's distribution: bundlers
 do not copy standalone license text files automatically. See
@@ -330,11 +363,16 @@ notices belonging to your own native dependencies.
 import { generate, readConfig } from '@heojeongbo/wasmgen';
 
 await readConfig('wasmgen.yaml');
-await generate('wasmgen.yaml', {
+const { output, modules } = await generate('wasmgen.yaml', {
   onProgress: console.log,
   signal: new AbortController().signal,
 });
+console.log(output, modules);
 ```
+
+This is a Node.js ESM build API. Browser applications import the generated code,
+not `@heojeongbo/wasmgen` itself. [API options and results](docs/configuration.md#library-api)
+are documented separately from the generated browser client.
 
 ## Architecture
 
@@ -431,6 +469,8 @@ root's transitive `[patch.crates-io]` override with an aliased package and a pat
 containing spaces, plus an exact-version `[replace]` override. It checks all native
 sources, manifests, and lockfiles stay unchanged, typechecks imports, and runs
 the same browser/build matrix.
+The C++ package fixture also checks public names that overlap Emscripten internals;
+production cases apply a CSP that permits Wasm compilation but blocks JavaScript eval.
 Only public generator files enter the package.
 
 All checked-in fixtures are independent, general-purpose examples. No external
