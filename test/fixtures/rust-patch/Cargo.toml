@@ -1,0 +1,11 @@
+[workspace]
+members = ["calc", "offset"]
+exclude = ["vendor/itoa patched"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[patch.crates-io]
+itoa_fixture = { package = "itoa", version = "=1.0.15", path = "vendor/itoa patched" }

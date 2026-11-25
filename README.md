@@ -16,9 +16,8 @@ runs in its own Web Worker and exposes Promise-returning functions. Generated
 code has no runtime npm dependency on wasmgen and contacts no build service.
 
 The project and CLI are named **wasmgen**. The npm package is
-`@heojeongbo/wasmgen`. Rust support in this checkout is unreleased; npm `0.1.0`
-supports Go and C++. To try Rust before the next release, build this checkout
-and install its local tarball as described below.
+`@heojeongbo/wasmgen`. Rust support, including Cargo workspace dependency
+overrides, is available starting with `0.2.0`.
 
 ## Install
 
@@ -58,9 +57,9 @@ pnpm exec vite preview examples/web --base=/demo/
 ```
 
 To test a local build of the generator in another project, run `pnpm pack` here,
-then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.1.0.tgz`
+then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.2.0.tgz`
 there. This does not publish anything. Its runtime npm dependencies are the
-public `yaml` and `zod` packages. Installation has no install/postinstall scripts
+public `yaml`, `zod`, and `smol-toml` packages. Installation has no install/postinstall scripts
 or native builds; `prepack` compiles TypeScript when packaging the generator.
 
 ## Configure inputs and output
@@ -232,9 +231,26 @@ Rust input modes:
   This supports path dependencies and workspace-inherited package/dependency
   settings. Select a concrete crate, not a virtual workspace or binary-only crate.
 
-The bridge uses the package's default features. Its isolated manifest does not
-inherit workspace-root `[patch]`, `[replace]`, or release profiles. A copy of the
-original workspace lockfile seeds resolution; Cargo may resolve additional binding
+The bridge uses the package's default features and inherits the original
+workspace root's `[patch]` or `[replace]` tables. Relative override `path` values
+are resolved against that root before being written into the temporary bridge;
+Git source selectors, revisions, registry names, aliases, and dependency options
+are preserved. Member-local overrides remain ignored, matching Cargo's rules.
+This also works for standalone library packages, whose manifest is the workspace root.
+Write overrides in the original `Cargo.toml`; no extra wasmgen configuration is needed:
+
+```toml
+# Original workspace Cargo.toml
+[patch.crates-io]
+my_math = { path = "vendor/my-math" }
+```
+
+Legacy `[replace]` entries such as `"my-math:1.2.3" = { path = "vendor/my-math" }`
+are also preserved. Cargo deprecates `[replace]` in favor of `[patch]`; its normal
+validation and version-selection rules still apply. The bridge keeps its own
+release profile rather than inheriting workspace release profiles.
+
+A copy of the original workspace lockfile seeds resolution; Cargo may resolve additional binding
 dependencies in the temporary copy. Original sources, manifests, and lockfiles
 are not modified. Cargo may download dependencies during generation.
 
@@ -410,8 +426,11 @@ memory growth, and panic rejection of pending calls.
 `test:package` packs and installs a local tarball into a separate
 consumer, invokes the installed CLI/library, compiles a Go `internal` package
 with a local `replace` dependency, a C++ module, and a Rust workspace library with
-a path dependency and custom library name. It checks original Rust files stay
-unchanged, typechecks imports, and runs the same browser/build matrix.
+a path dependency and custom library name. Additional crates verify a workspace
+root's transitive `[patch.crates-io]` override with an aliased package and a path
+containing spaces, plus an exact-version `[replace]` override. It checks all native
+sources, manifests, and lockfiles stay unchanged, typechecks imports, and runs
+the same browser/build matrix.
 Only public generator files enter the package.
 
 All checked-in fixtures are independent, general-purpose examples. No external

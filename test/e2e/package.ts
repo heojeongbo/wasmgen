@@ -3,6 +3,16 @@ import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { run } from '../../src/process.js';
 import { runBrowsers } from './browser.js';
+import { nativeSnapshot } from './native-snapshot.js';
+
+interface AddClient { add(value: number): Promise<number>; dispose(): void }
+type PackageGlobals = typeof globalThis & { __wasmgenTest: {
+  calc: () => Promise<AddClient>;
+  geometry: () => Promise<{ clamp(value: number, low: number, high: number): Promise<number>; dispose(): void }>;
+  rustCalc: () => Promise<AddClient>;
+  rustPatch: () => Promise<AddClient>;
+  rustReplace: () => Promise<AddClient>;
+} };
 
 const artifacts = path.resolve('.artifacts');
 await mkdir(artifacts, { recursive: true });
@@ -22,6 +32,7 @@ await run('pnpm', ['add', '--save-dev', '--ignore-scripts', '--registry=https://
 await cp('test/fixtures', path.join(consumer, 'native'), { recursive: true });
 await cp('examples/cpp', path.join(consumer, 'native/cpp'), { recursive: true });
 const rustLock = await readFile(path.join(consumer, 'native/rust-workspace/Cargo.lock'), 'utf8');
+const nativeBefore = await nativeSnapshot(path.join(consumer, 'native'));
 const root = path.join(consumer, 'web');
 await mkdir(root);
 await writeFile(path.join(consumer, 'wasmgen.json'), JSON.stringify({
@@ -35,6 +46,12 @@ await writeFile(path.join(consumer, 'wasmgen.json'), JSON.stringify({
     { name: 'rustCalc', language: 'rust', package: './native/rust-workspace/calc', exports: {
       add: { symbol: 'arithmetic::add', params: [{ name: 'value', type: 'f64' }], result: 'f64' },
     } },
+    { name: 'rustPatch', language: 'rust', package: './native/rust-patch/calc', exports: {
+      add: { params: [{ name: 'value', type: 'f64' }], result: 'f64' },
+    } },
+    { name: 'rustReplace', language: 'rust', package: './native/rust-replace/calc', exports: {
+      add: { params: [{ name: 'value', type: 'f64' }], result: 'f64' },
+    } },
   ],
 }, null, 2));
 await run(path.join(consumer, 'node_modules/.bin/wasmgen'), ['check', '--config', 'wasmgen.json'], { cwd: consumer });
@@ -43,23 +60,26 @@ await run(path.join(consumer, 'node_modules/.bin/wasmgen'), ['gen', '--config', 
 // with the generator's staging or backup directories.
 await run(path.join(consumer, 'node_modules/.bin/wasmgen'), ['gen', '--config', 'wasmgen.json'], { cwd: consumer });
 // The package API and CLI must both resolve from the installed tarball.
-assert.equal(await run('node', ['--input-type=module', '-e', 'import { readConfig } from "@heojeongbo/wasmgen"; console.log((await readConfig("wasmgen.json")).input.length)'], { cwd: consumer }), '3');
+assert.equal(await run('node', ['--input-type=module', '-e', 'import { readConfig } from "@heojeongbo/wasmgen"; console.log((await readConfig("wasmgen.json")).input.length)'], { cwd: consumer }), '5');
 assert(!(await readdir(path.join(consumer, 'native/go-module/internal/calc'))).some((entry) => entry.startsWith('.wasmgen-')), 'temporary Go wrapper must be removed');
 assert.equal(await readFile(path.join(consumer, 'native/rust-workspace/Cargo.lock'), 'utf8'), rustLock, 'the original Rust lockfile must remain unchanged');
 assert.deepEqual((await readdir(path.join(consumer, 'native/rust-workspace'))).sort(), ['Cargo.lock', 'Cargo.toml', 'calc', 'offset']);
+assert.deepEqual(await nativeSnapshot(path.join(consumer, 'native')), nativeBefore, 'native sources, override manifests, and lockfiles must remain unchanged');
 // Unsupported Cargo targets must fail without replacing a previously working build.
 const previousBarrel = await readFile(path.join(root, 'generated/index.js'), 'utf8');
 await mkdir(path.join(consumer, 'native/rust-binary/src'), { recursive: true });
 await writeFile(path.join(consumer, 'native/rust-binary/Cargo.toml'), '[package]\nname = "binary-only"\nversion = "0.0.0"\nedition = "2021"\n');
 await writeFile(path.join(consumer, 'native/rust-binary/src/main.rs'), 'fn main() {}\n');
+const nativeBeforeInvalid = await nativeSnapshot(path.join(consumer, 'native'));
 for (const directory of ['./native/rust-workspace', './native/rust-binary']) {
   await writeFile(path.join(consumer, 'invalid-rust.json'), JSON.stringify({ version: 1, output: './web/generated', input: [{ name: 'invalid', language: 'rust', package: directory, exports: { add: { result: 'f64' } } }] }));
   await assert.rejects(run(path.join(consumer, 'node_modules/.bin/wasmgen'), ['gen', '--config', 'invalid-rust.json'], { cwd: consumer }), /Rust package must select a library crate/);
   assert.equal(await readFile(path.join(root, 'generated/index.js'), 'utf8'), previousBarrel);
+  assert.deepEqual(await nativeSnapshot(path.join(consumer, 'native')), nativeBeforeInvalid);
 }
 await writeFile(path.join(root, 'index.html'), '<!doctype html><html lang="en"><meta charset="utf-8"><title>wasmgen installed package</title><h1>wasmgen · installed package</h1><pre id="result">Running…</pre><script type="module" src="./main.ts"></script></html>');
-await writeFile(path.join(root, 'main.ts'), `import { output as calc, previous as geometry, rustCalc } from './generated/index.js';
-Object.assign(globalThis, { __wasmgenTest: { calc, geometry, rustCalc } });
+await writeFile(path.join(root, 'main.ts'), `import { output as calc, previous as geometry, rustCalc, rustPatch, rustReplace } from './generated/index.js';
+Object.assign(globalThis, { __wasmgenTest: { calc, geometry, rustCalc, rustPatch, rustReplace } });
 async function typeContract() {
   const api = await calc();
   const value: number = await api.add(1);
@@ -77,19 +97,21 @@ async function typeContract() {
 await run('node', [path.resolve('node_modules/typescript/bin/tsc'), '--noEmit', '--strict', '--module', 'esnext', '--moduleResolution', 'bundler', '--target', 'es2022', path.join(root, 'main.ts')]);
 await runBrowsers(root, async (page) => {
   const results = await page.evaluate(async () => {
-    const { calc, geometry, rustCalc } = (globalThis as typeof globalThis & { __wasmgenTest: { calc: () => Promise<{ add(value: number): Promise<number>; dispose(): void }>; geometry: () => Promise<{ clamp(value: number, low: number, high: number): Promise<number>; dispose(): void }>; rustCalc: () => Promise<{ add(value: number): Promise<number>; dispose(): void }> } }).__wasmgenTest;
+    const { calc, geometry, rustCalc, rustPatch, rustReplace } = (globalThis as PackageGlobals).__wasmgenTest;
     const go = await calc();
     const cpp = await geometry();
     const rust = await rustCalc();
+    const patched = await rustPatch();
+    const replaced = await rustReplace();
     try {
-      const values = { goInternalWithReplace: await go.add(35), cpp: await cpp.clamp(42, 0, 10), rustWorkspaceDependency: await rust.add(35) };
+      const values = { goInternalWithReplace: await go.add(35), cpp: await cpp.clamp(42, 0, 10), rustWorkspaceDependency: await rust.add(35), rustRootPatch: await patched.add(35), rustRootReplace: await replaced.add(35) };
       const result = document.querySelector('#result');
       if (!result) throw new Error('result element is missing');
       result.textContent = JSON.stringify(values, null, 2);
       return values;
-    } finally { go.dispose(); cpp.dispose(); rust.dispose(); }
+    } finally { go.dispose(); cpp.dispose(); rust.dispose(); patched.dispose(); replaced.dispose(); }
   });
-  assert.deepEqual(results, { goInternalWithReplace: 42, cpp: 10, rustWorkspaceDependency: 42 });
+  assert.deepEqual(results, { goInternalWithReplace: 42, cpp: 10, rustWorkspaceDependency: 42, rustRootPatch: 42, rustRootReplace: 84 });
   return results;
 }, 'package');
 await writeFile(path.join(artifacts, 'package-contents.json'), JSON.stringify(packed, null, 2) + '\n');

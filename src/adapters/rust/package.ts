@@ -5,6 +5,7 @@ import type { ResolvedInput } from '../../model/config.js';
 import type { BuildContext } from '../../ports/language.js';
 import { run } from '../../process.js';
 import { hasCode } from '../../shared/errors.js';
+import { readWorkspaceOverrides } from './overrides.js';
 
 const metadataSchema = z.object({
   workspace_root: z.string(),
@@ -14,7 +15,7 @@ const metadataSchema = z.object({
   })),
 });
 
-export async function preparePackage(input: ResolvedInput, context: BuildContext): Promise<{ name: string; directory: string }> {
+export async function preparePackage(input: ResolvedInput, context: BuildContext): Promise<{ name: string; directory: string; overrides: string }> {
   if (input.package) {
     const manifest = await realpath(path.join(input.package, 'Cargo.toml'));
     const metadata = metadataSchema.parse(JSON.parse(await run(context.tools.cargo ?? 'cargo', [
@@ -27,7 +28,7 @@ export async function preparePackage(input: ResolvedInput, context: BuildContext
     // Seed dependency resolution without modifying the original workspace lockfile.
     try { await copyFile(path.join(metadata.workspace_root, 'Cargo.lock'), path.join(context.scratch, 'Cargo.lock')); }
     catch (error) { if (!hasCode(error, 'ENOENT')) throw error; }
-    return { name: entry.name, directory: input.package };
+    return { name: entry.name, directory: input.package, overrides: await readWorkspaceOverrides(metadata.workspace_root) };
   }
 
   const source = input.files[0];
@@ -43,5 +44,5 @@ publish = false
 [lib]
 path = ${JSON.stringify(source)}
 `);
-  return { name: 'wasmgen-native', directory };
+  return { name: 'wasmgen-native', directory, overrides: '' };
 }

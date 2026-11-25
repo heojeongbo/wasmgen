@@ -35,6 +35,7 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = "debuginfo"
+${native.overrides}
 `);
   await writeFile(path.join(scratch, 'bridge.rs'), rustBridge(input));
   const target = path.join(scratch, 'target');

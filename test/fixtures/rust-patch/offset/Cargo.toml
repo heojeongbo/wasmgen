@@ -1,0 +1,7 @@
+[package]
+name = "fixture-patch-offset"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+itoa = "=1.0.15"

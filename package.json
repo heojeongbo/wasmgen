@@ -1,6 +1,6 @@
 {
   "name": "@heojeongbo/wasmgen",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Generate browser WebAssembly modules and typed clients from Go, C++ and Rust sources.",
   "type": "module",
   "license": "MIT",
@@ -44,15 +44,16 @@
     "gen:example": "node dist/cli.js gen --config examples/wasmgen.yaml"
   },
   "dependencies": {
+    "smol-toml": "1.9.1",
     "yaml": "2.9.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "playwright": "1.60.0",
-    "typescript": "5.9.3",
-    "vite": "7.3.8",
     "@types/node": "24.3.0",
-    "tsx": "4.20.4"
+    "playwright": "1.60.0",
+    "tsx": "4.20.4",
+    "typescript": "5.9.3",
+    "vite": "7.3.8"
   },
   "packageManager": "pnpm@10.11.0"
 }

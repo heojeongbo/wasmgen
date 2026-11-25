@@ -1,0 +1,11 @@
+[package]
+name = "fixture-patch-calc"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+offset = { package = "fixture-patch-offset", path = "../offset" }
+
+# Cargo ignores member overrides; only the workspace root must be inherited.
+[patch.crates-io]
+itoa = { path = "../member-override-must-be-ignored" }
