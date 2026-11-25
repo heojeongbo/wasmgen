@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.2
+
+- Added `--version` / `-v` and expanded CLI help with commands and examples.
+- Separated CLI argument parsing from execution. Config flags accept `--config=file`
+  and can precede the command; ambiguous values and unknown arguments fail explicitly.
+- Config diagnostics include the selected config file, input field and underlying
+  validation reason. Build failures identify their module and language, preserving
+  the original error in the cause chain.
+- Documented reuse of generated client/options types in TypeScript applications.
+
 ## 0.2.1
 
 ### Fixed

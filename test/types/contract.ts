@@ -1,11 +1,13 @@
 import { generate, readConfig, type Config } from '@heojeongbo/wasmgen';
 import { arithmetic, geometry, policy } from '../../examples/web/generated/index.js';
+import type { API as GeometryAPI, Options as GeometryOptions } from '../../examples/web/generated/geometry/index.js';
 
 async function contract() {
   await generate('wasmgen.yaml', { signal: new AbortController().signal });
   const config = await readConfig('wasmgen.yaml');
   const language: 'cpp' | 'go' | 'rust' = config.input[0].language;
-  const cpp = await geometry();
+  const options: GeometryOptions = { timeoutMs: 30_000 };
+  const cpp: GeometryAPI = await geometry(options);
   const go = await policy();
   const rust = await arithmetic();
   const rustText: string = await rust.label('wasm');

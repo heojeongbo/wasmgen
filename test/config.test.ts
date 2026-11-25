@@ -99,3 +99,41 @@ test('accepts an output beneath a symlinked parent when inputs stay outside it',
   await writeFile(file, JSON.stringify({ ...valid(), output: './alias/nested/generated' }));
   assert.equal((await readConfig(file)).output, path.join(dir, 'alias/nested/generated'));
 });
+
+test('schema diagnostics identify the config file, field and invalid record-key reason', async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'wasmgen-diagnostic-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'config.json');
+  await writeFile(file, JSON.stringify(withInput({ exports: { dispose: { result: 'void' } } })));
+  await assert.rejects(readConfig(file), (error: unknown) => {
+    assert(error instanceof Error && error.cause instanceof Error);
+    assert(error.message.startsWith(file + ':'));
+    assert.match(error.message, /input\[0\]\.exports\.dispose/);
+    assert.match(error.message, /non-reserved JavaScript identifier/);
+    return true;
+  });
+});
+
+test('missing input diagnostics identify the config, module and field and preserve the filesystem cause', async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'wasmgen-diagnostic-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'config.json');
+  await writeFile(file, JSON.stringify(valid()));
+  await assert.rejects(readConfig(file), (error: unknown) => {
+    assert(error instanceof Error && error.cause instanceof Error);
+    assert(error.message.startsWith(file + ':'));
+    assert.match(error.message, /math\.files\[0\]: file not found/);
+    const original = error.cause.cause;
+    assert(original instanceof Error && 'code' in original && original.code === 'ENOENT');
+    return true;
+  });
+});
+
+test('wrong input kinds identify the offending header field', async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'wasmgen-diagnostic-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await mkdir(path.join(directory, 'headers'));
+  const file = path.join(directory, 'config.json');
+  await writeFile(file, JSON.stringify(withInput({ language: 'cpp', files: undefined, headers: ['headers'] })));
+  await assert.rejects(readConfig(file), /math\.headers\[0\]: input is not a file/);
+});

@@ -33,6 +33,8 @@ await rm(consumer, { recursive: true, force: true });
 await mkdir(consumer, { recursive: true });
 await writeFile(path.join(consumer, 'package.json'), JSON.stringify({ name: 'wasmgen-consumer', private: true, type: 'module', packageManager: 'pnpm@10.11.0' }));
 await run('pnpm', ['add', '--save-dev', '--ignore-scripts', '--registry=https://registry.npmjs.org', path.resolve(artifacts, packed.filename)], { cwd: consumer });
+const installedManifest = JSON.parse(await readFile(path.join(consumer, 'node_modules/@heojeongbo/wasmgen/package.json'), 'utf8')) as { version: string };
+assert.equal(await run(path.join(consumer, 'node_modules/.bin/wasmgen'), ['--version'], { cwd: consumer }), installedManifest.version);
 await cp('test/fixtures', path.join(consumer, 'native'), { recursive: true });
 await cp('examples/cpp', path.join(consumer, 'native/cpp'), { recursive: true });
 const rustLock = await readFile(path.join(consumer, 'native/rust-workspace/Cargo.lock'), 'utf8');

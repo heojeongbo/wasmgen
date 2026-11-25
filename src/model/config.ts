@@ -3,7 +3,7 @@ import { valueTypes } from './value-types.js';
 
 const reserved = new Set('await break case catch class const continue debugger default delete do else enum export extends false finally for function if implements import in instanceof interface let new null package private protected public return static super switch this throw true try typeof var void while with yield arguments eval dispose constructor prototype __proto__'.split(' '));
 const text = z.string().min(1).refine((value) => Boolean(value.trim()) && !/[\x00-\x1f]/.test(value), 'expected nonempty text without control characters');
-const identifier = text.refine((value) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(value) && !reserved.has(value), 'invalid identifier');
+const identifier = text.refine((value) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(value) && !reserved.has(value), 'expected a non-reserved JavaScript identifier ([A-Za-z_][A-Za-z0-9_]*)');
 const exportName = identifier.refine((value) => value !== 'then', 'then is reserved to prevent Promise assimilation');
 const valueType = z.enum(valueTypes);
 const parameter = z.strictObject({ name: identifier, type: valueType });

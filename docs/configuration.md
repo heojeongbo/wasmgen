@@ -79,11 +79,20 @@ not exposed by this version.
 ```sh
 pnpm exec wasmgen check --config wasmgen.yaml
 pnpm exec wasmgen gen --config wasmgen.yaml
+pnpm exec wasmgen --version
 ```
 
 `-c` aliases `--config`; the default is `wasmgen.yaml` in the current directory.
-`--help` or `-h` prints usage. Failures print a diagnostic to stderr and return
+`--help` or `-h` prints usage and examples. `--version` or `-v` prints the installed
+npm package version. `--config=file` and flags before the command are also accepted.
+For a filename beginning with a dash, use `--config=--filename`; an ambiguous
+`--config --help` is rejected instead of silently displaying help.
+Failures print a diagnostic to stderr and return
 exit status `1`. Generation progress goes to stderr; success goes to stdout.
+
+Configuration errors name the selected config file and the relevant field/module.
+Compiler failures name the module and language. The library API preserves the
+underlying errors in the `Error.cause` chain for callers that need more detail.
 
 `check` performs no compilation or browser execution. `gen` builds each module
 sequentially into staging and replaces output only after all modules succeed.

@@ -2,8 +2,15 @@
 
 Start with `pnpm exec wasmgen check --config wasmgen.yaml`, then `gen`.
 A successful check does not establish that a compiler is installed or that a
-native dependency supports the browser target. Keep the compiler diagnostic
+native dependency supports the browser target. Use `pnpm exec wasmgen --version`
+to identify the installed generator. Keep the compiler diagnostic
 when reporting a failure; include a minimal input/config and tool versions.
+
+Config diagnostics include the config path and offending field, for example
+`/project/wasmgen.yaml: geometry.files[0]: file not found: /project/native/math.cc`.
+Paths resolve from that config's directory. A message starting with
+`geometry (cpp) build failed:` identifies the module whose compiler or generated
+output failed; the following diagnostic carries the underlying cause.
 
 ## Compiler and dependency failures
 

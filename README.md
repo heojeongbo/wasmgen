@@ -66,7 +66,7 @@ pnpm exec vite preview examples/web --base=/demo/
 ```
 
 To test a local build of the generator in another project, run `pnpm pack` here,
-then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.2.1.tgz`
+then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.2.2.tgz`
 there. This does not publish anything. Its runtime npm dependencies are the
 public `yaml`, `zod`, and `smol-toml` packages. Installation has no install/postinstall scripts
 or native builds; `prepack` compiles TypeScript when packaging the generator.
@@ -146,6 +146,23 @@ Each factory starts a separate Worker and native runtime. Calls within an
 instance execute serially; separate instances can run independently. Strings
 and arrays are copied across boundaries. Array parameters and results use plain
 JavaScript arrays, not typed arrays or shared memory.
+
+Reuse the generated types when storing a client or accepting one as a dependency:
+
+```ts
+import type { API as GeometryAPI, Options as GeometryOptions } from './generated/geometry/index.js';
+
+const options: GeometryOptions = { timeoutMs: 10_000 };
+const client: GeometryAPI = await geometry(options);
+try {
+  console.log(await client.clamp(23, 0, 10));
+} finally {
+  client.dispose();
+}
+```
+
+These are type-only imports. The declarations are generated from the same signatures
+as the client; keep them with its JavaScript and Wasm output.
 
 Factories accept `{ signal?: AbortSignal, timeoutMs?: number }`. The default
 30-second timeout applies to initialization and each call, including queue time.

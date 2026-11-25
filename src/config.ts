@@ -1,9 +1,26 @@
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { parseDocument } from 'yaml';
+import type { z } from 'zod';
 import { configSchema, type ResolvedConfig, type ResolvedInput } from './model/config.js';
 import type { InputValidators } from './ports/language.js';
-import { hasCode } from './shared/errors.js';
+import { errorMessage, hasCode } from './shared/errors.js';
+
+function formatIssue(issue: z.ZodIssue): string {
+  const at = issue.path.map((part, index) => typeof part === 'number' ? `[${part}]` : `${index ? '.' : ''}${String(part)}`).join('');
+  const details = issue.code === 'invalid_key' ? ` (${issue.issues.map((nested) => nested.message).join('; ')})` : '';
+  return `${at || 'config'}: ${issue.message}${details}`;
+}
+
+async function requirePath(file: string, kind: 'file' | 'directory', at: string): Promise<void> {
+  let info;
+  try { info = await stat(file); }
+  catch (error) {
+    const detail = hasCode(error, 'ENOENT') ? `${kind} not found: ${file}` : `cannot access ${file}: ${errorMessage(error)}`;
+    throw new Error(`${at}: ${detail}`, { cause: error });
+  }
+  if (kind === 'file' ? !info.isFile() : !info.isDirectory()) throw new Error(`${at}: input is not a ${kind}: ${file}`);
+}
 
 function inputPaths(configPath: string, input: ResolvedInput[]): string[] {
   return [path.resolve(configPath), ...input.flatMap((mod) => [...mod.files, ...mod.headers, ...mod.include, ...(mod.package ? [mod.package] : [])])];
@@ -29,7 +46,7 @@ async function physicalPath(file: string): Promise<string> {
 
 export function validateConfig(value: unknown, configPath: string, validators: InputValidators): ResolvedConfig {
   const parsed = configSchema.safeParse(value);
-  if (!parsed.success) throw new Error(`invalid config: ${parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`);
+  if (!parsed.success) throw new Error(`invalid config: ${parsed.error.issues.map(formatIssue).join('; ')}`, { cause: parsed.error });
   const raw = parsed.data;
   const root = path.dirname(path.resolve(configPath));
   const output = path.resolve(root, raw.output);
@@ -57,13 +74,20 @@ export function validateConfig(value: unknown, configPath: string, validators: I
 
 export async function readConfig(configPath: string, validators: InputValidators): Promise<ResolvedConfig> {
   const absolute = path.resolve(configPath);
-  const doc = parseDocument(await readFile(absolute, 'utf8'), { uniqueKeys: true });
-  if (doc.errors[0]) throw new Error(`invalid config: ${doc.errors[0].message}`);
-  const config = validateConfig(doc.toJS({ maxAliasCount: 0 }) as unknown, absolute, validators);
-  for (const mod of config.input) {
-    for (const file of [...mod.files, ...mod.headers]) if (!(await stat(file)).isFile()) throw new Error(`input is not a file: ${file}`);
-    for (const dir of [...mod.include, ...(mod.package ? [mod.package] : [])]) if (!(await stat(dir)).isDirectory()) throw new Error(`input is not a directory: ${dir}`);
+  try {
+    const doc = parseDocument(await readFile(absolute, 'utf8'), { uniqueKeys: true });
+    if (doc.errors[0]) throw new Error(`invalid config: ${doc.errors[0].message}`, { cause: doc.errors[0] });
+    const config = validateConfig(doc.toJS({ maxAliasCount: 0 }) as unknown, absolute, validators);
+    for (const mod of config.input) {
+      for (const key of ['files', 'headers'] as const) {
+        for (const [index, file] of mod[key].entries()) await requirePath(file, 'file', `${mod.name}.${key}[${index}]`);
+      }
+      for (const [index, dir] of mod.include.entries()) await requirePath(dir, 'directory', `${mod.name}.include[${index}]`);
+      if (mod.package) await requirePath(mod.package, 'directory', `${mod.name}.package`);
+    }
+    checkOutputPaths(await physicalPath(config.output), await Promise.all(inputPaths(absolute, config.input).map((file) => realpath(file))));
+    return config;
+  } catch (error) {
+    throw new Error(`${absolute}: ${errorMessage(error)}`, { cause: error });
   }
-  checkOutputPaths(await physicalPath(config.output), await Promise.all(inputPaths(absolute, config.input).map((file) => realpath(file))));
-  return config;
 }

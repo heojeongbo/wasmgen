@@ -19,7 +19,12 @@ test('failed builds preserve the previous output and release the generation lock
   await mkdir(output);
   await writeFile(path.join(output, 'index.js'), 'previous output');
   await writeFile(path.join(output, '.wasmgen.json'), JSON.stringify({ generator: 'wasmgen', files: ['index.js'] }));
-  await assert.rejects(generate(file), /cannot run/);
+  await assert.rejects(generate(file), (error: unknown) => {
+    assert(error instanceof Error && error.cause instanceof Error);
+    assert.match(error.message, /sample \(go\) build failed:.*cannot run/);
+    assert.match(error.cause.message, /cannot run/);
+    return true;
+  });
   assert.equal(await readFile(path.join(output, 'index.js'), 'utf8'), 'previous output');
   assert.deepEqual((await readdir(dir)).sort(), ['config.json', 'generated', 'source.go']);
 });
