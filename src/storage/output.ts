@@ -23,7 +23,6 @@ async function inspectOutput(output: string): Promise<boolean> {
   let manifest;
   try { manifest = z.object({ generator: z.literal('wasmgen'), files: z.array(z.string()) }).parse(JSON.parse(await readFile(path.join(output, '.wasmgen.json'), 'utf8')) as unknown); }
   catch { throw new Error(`refusing to replace output not owned by wasmgen: ${output}`); }
-  if (manifest.generator !== 'wasmgen' || !Array.isArray(manifest.files)) throw new Error(`invalid output manifest: ${output}`);
   const owned = new Set([...manifest.files, '.wasmgen.json']);
   for (const file of files) if (!owned.has(file)) throw new Error(`refusing to delete unmanaged output file: ${file}`);
   return true;
@@ -67,7 +66,8 @@ export async function withOutput(output: string, build: (staging: string, result
     }
 
   } finally {
-    if (staging && !preserveStaging) await rm(staging, { recursive: true, force: true });
-    await rm(lock, { recursive: true, force: true });
+    try {
+      if (staging && !preserveStaging) await rm(staging, { recursive: true, force: true });
+    } finally { await rm(lock, { recursive: true, force: true }); }
   }
 }

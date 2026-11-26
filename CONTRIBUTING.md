@@ -12,6 +12,12 @@ Use the [test container](README.md#validation) for a reproducible set of Go,
 Emscripten, Rust, wasm-bindgen and browser versions. Install dependencies with
 `pnpm install --frozen-lockfile` inside it.
 
+`pnpm test` enforces **100% statements, branches, functions and lines per file**
+for all executable TypeScript under `src/`, including files not imported by tests.
+Use Node 24 for repository tests; the script enables Node's experimental module
+mocking for OS-boundary fault injection. See [coverage scope and reports](docs/testing.md).
+Do not suppress coverage or remove useful failure handling to satisfy a metric.
+
 | Change | Validation |
 | --- | --- |
 | Config, output handling or other generator logic | `pnpm run check` and `pnpm test`; add a regression for a reproduced behavior change. |

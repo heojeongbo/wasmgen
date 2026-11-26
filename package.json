@@ -1,6 +1,6 @@
 {
   "name": "@heojeongbo/wasmgen",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Generate browser WebAssembly modules and typed clients from Go, C++ and Rust sources.",
   "type": "module",
   "license": "MIT",
@@ -40,7 +40,8 @@
     "bench": "pnpm run build && tsx benchmarks/run.ts",
     "architecture:check": "tsx scripts/check-architecture.ts",
     "test:compile": "tsc -p test/tsconfig.json",
-    "test": "pnpm run build && pnpm run test:compile && node --test .test-build/test/*.test.js",
+    "test": "pnpm run test:coverage",
+    "test:coverage": "tsx scripts/coverage.ts",
     "test:e2e": "pnpm run build && pnpm run gen:example && pnpm run typecheck:generated && pnpm run test:compile:e2e && node .test-build/test/e2e/run.js",
     "test:package": "pnpm run build && pnpm run gen:example && pnpm run test:compile:e2e && node .test-build/test/e2e/package.js",
     "prepack": "pnpm run build",
@@ -54,10 +55,17 @@
   },
   "devDependencies": {
     "@types/node": "24.3.0",
+    "c8": "12.0.0",
     "playwright": "1.60.0",
     "tsx": "4.20.4",
     "typescript": "5.9.3",
     "vite": "7.3.8"
   },
-  "packageManager": "pnpm@10.11.0"
+  "packageManager": "pnpm@10.11.0",
+  "pnpm": {
+    "overrides": {
+      "test-exclude@8.0.0>glob": "14.0.6",
+      "test-exclude@8.0.0>minimatch": "11.0.9"
+    }
+  }
 }

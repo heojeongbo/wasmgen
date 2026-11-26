@@ -49,3 +49,88 @@ test('an undecodable worker response rejects pending work and releases the worke
   await pending;
   assert(worker.terminated);
 });
+
+test('invalid timeouts and aborted signals never create a Worker', async () => {
+  const factory = () => { throw new Error('must not create Worker'); };
+  for (const timeoutMs of [0, -1, Infinity, NaN, 2147483648]) await assert.rejects(connect(factory, { timeoutMs }), /timeoutMs/);
+  const controller = new AbortController();
+  controller.abort(new Error('cancelled'));
+  await assert.rejects(connect(factory, { signal: controller.signal }), /cancelled/);
+  Object.defineProperty(controller.signal, 'reason', { value: undefined });
+  await assert.rejects(connect(factory, { signal: controller.signal }), /wasmgen aborted/);
+  await assert.rejects(connect(factory), /must not create Worker/);
+});
+
+test('client settles replies once and disposal rejects queued work', async () => {
+  const worker = new WorkerStub();
+  const connection = connect(() => worker);
+  worker.receive({ type: 'ready' });
+  worker.receive({ type: 'ready' });
+  const client = await connection;
+  const first = client.call('value', []);
+  worker.receive({ type: 'result', id: 1, ok: true, value: 42 });
+  assert.equal(await first, 42);
+  worker.receive({ type: 'result', id: 1, ok: true, value: 99 });
+  const second = assert.rejects(client.call('value', []), /recoverable/);
+  worker.receive({ type: 'result', id: 2, ok: false, error: 'recoverable' });
+  await second;
+  const pending = assert.rejects(client.call('value', []), /disposed/);
+  client.dispose(); client.dispose();
+  worker.receive({ type: 'ready' });
+  await pending;
+  assert(worker.terminated);
+});
+
+test('posting an uncloneable argument rejects just that call', async () => {
+  const worker = new WorkerStub();
+  worker.postMessage = () => { throw new DOMException('cannot clone', 'DataCloneError'); };
+  const connection = connect(() => worker);
+  worker.receive({ type: 'ready' });
+  const client = await connection;
+  await assert.rejects(client.call('value', [() => {}]), /cannot clone/);
+  assert.equal(worker.terminated, false);
+  client.dispose();
+});
+
+test('call deadlines terminate all pending work', async () => {
+  const worker = new WorkerStub();
+  const connection = connect(() => worker, { timeoutMs: 10 });
+  worker.receive({ type: 'ready' });
+  const client = await connection;
+  await assert.rejects(client.call('slow', []), /call slow timed out/);
+  assert(worker.terminated);
+});
+
+test('aborting after initialization terminates the instance, including signals without reasons', async () => {
+  for (const legacy of [false, true]) {
+    const worker = new WorkerStub();
+    const controller = new AbortController();
+    if (legacy) Object.defineProperty(controller.signal, 'reason', { value: undefined });
+    const connection = connect(() => worker, { signal: controller.signal });
+    worker.receive({ type: 'ready' });
+    const client = await connection;
+    const pending = assert.rejects(client.call('value', []), legacy ? /wasmgen aborted/ : /cancelled/);
+    controller.abort(new Error('cancelled'));
+    await pending;
+    assert(worker.terminated);
+  }
+});
+
+test('invalid messages and Worker errors fail initialization deterministically', async () => {
+  for (const payload of [null, { type: 'other' }]) {
+    const worker = new WorkerStub();
+    const connection = connect(() => worker);
+    worker.receive(payload);
+    await assert.rejects(connection, /invalid worker response/);
+    assert(worker.terminated);
+  }
+  for (const message of ['script load failed', '']) {
+    const worker = new WorkerStub();
+    const connection = connect(() => worker);
+    const event = Object.assign(new Event('error', { cancelable: true }), { message }) as ErrorEvent;
+    worker.onerror?.(event);
+    await assert.rejects(connection, message ? /script load failed/ : /worker failed/);
+    assert(event.defaultPrevented);
+    assert(worker.terminated);
+  }
+});

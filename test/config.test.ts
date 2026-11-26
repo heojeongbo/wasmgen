@@ -33,6 +33,11 @@ const cases: Array<[string, unknown, RegExp]> = [
   ['package and files', withInput({ package: '.' }), /exactly one/],
   ['duplicate Go basenames', withInput({ files: ['./math.go', './other/math.go'] }), /duplicate Go basenames/],
   ['C++ missing declarations', withInput({ language: 'cpp' }), /requires declarations/],
+  ['C++ package input', withInput({ language: 'cpp', package: './native' }), /package is only valid/],
+  ['C++ error option', withInput({ language: 'cpp', headers: ['a.h'], exports: { value: { result: 'void', error: false } } }), /error is only valid/],
+  ['Go test file', withInput({ files: ['math_test.go'] }), /non-test .go/],
+  ['Go wrong file extension', withInput({ files: ['math.cc'] }), /non-test .go/],
+  ['Go include directories', withInput({ include: ['native'] }), /only for C\+\+/],
   ['Rust without a crate root', withInput({ language: 'rust', files: undefined }), /exactly one/],
   ['Rust with multiple crate roots', withInput({ language: 'rust', files: ['lib.rs', 'other.rs'] }), /exactly one .rs/],
   ['Rust with a non-Rust input', withInput({ language: 'rust' }), /exactly one .rs/],
@@ -51,6 +56,37 @@ test('Rust packages support qualified symbols, fallible results and separate too
   assert.equal(config.input[0]?.package, '/project/crate');
   assert.equal(config.input[0]?.exports[0]?.error, true);
   assert.equal(config.tools.cargo, '/tools/cargo');
+});
+
+test('package and header-only inputs resolve default symbols and verify directory kinds', async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'wasmgen-config-kinds-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'config.json');
+  await mkdir(path.join(dir, 'native'));
+  await writeFile(path.join(dir, 'native/api.h'), '// header');
+  for (const input of [
+    { name: 'native', language: 'go', package: 'native', exports: { Value: { result: 'f64' } } },
+    { name: 'native', language: 'cpp', headers: ['native/api.h'], include: ['native'], exports: { value: { result: 'f64' } } },
+  ]) {
+    await writeFile(file, JSON.stringify({ version: 1, output: 'generated', input: [input] }));
+    const config = await readConfig(file);
+    assert.equal(config.input[0]?.exports[0]?.symbol, Object.keys(input.exports)[0]);
+  }
+  await writeFile(file, JSON.stringify({ version: 1, output: 'generated', input: [{ name: 'native', language: 'go', package: 'native/api.h', exports: { Value: { result: 'f64' } } }] }));
+  await assert.rejects(readConfig(file), /input is not a directory/);
+});
+
+test('filesystem access and symlink-loop errors retain their original diagnostics', async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'wasmgen-config-loop-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'config.json');
+  await symlink('loop.go', path.join(dir, 'loop.go'));
+  await writeFile(file, JSON.stringify(withInput({ files: ['loop.go'] })));
+  await assert.rejects(readConfig(file), /cannot access.*ELOOP/);
+  await writeFile(path.join(dir, 'math.go'), 'package sample');
+  await symlink('loop', path.join(dir, 'loop'));
+  await writeFile(file, JSON.stringify({ ...valid(), output: 'loop/output' }));
+  await assert.rejects(readConfig(file), /ELOOP/);
 });
 
 test('YAML duplicate keys fail instead of silently replacing configuration', async () => {

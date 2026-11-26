@@ -19,6 +19,7 @@ const sources = maintained.filter((file) => file.endsWith('.ts'));
 for (const filename of sources) {
   const source = await readFile(filename, 'utf8');
   const ast = ts.createSourceFile(filename, source, ts.ScriptTarget.Latest, true);
+  if (filename.startsWith('src/') && /(?:c8|v8|istanbul|node:coverage)\s+(?:ignore|disable)/.test(source)) failures.push(`${filename}: production coverage must not be suppressed`);
   if (/@ts-(?:ignore|nocheck)\b/.test(source)) failures.push(`${filename}: type checking must not be disabled`);
   function visit(node: ts.Node): void {
     if (node.kind === ts.SyntaxKind.AnyKeyword) failures.push(`${filename}: explicit any is not allowed`);

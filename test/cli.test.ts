@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile, mkdir, chmod, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import { setTimeout } from 'node:timers/promises';
 
 const execute = promisify(execFile);
 const cli = path.resolve('dist/cli.js');
@@ -55,3 +57,39 @@ for (const [name, args, message] of invalid) {
     });
   });
 }
+
+test('CLI generates through its public entrypoint and cancels running compilers on SIGINT', { timeout: 10_000 }, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'wasmgen-cli-gen-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const compiler = fileURLToPath(new URL('./helpers/compiler.js', import.meta.url));
+  await chmod(compiler, 0o755);
+  await mkdir(path.join(root, 'lib/wasm'), { recursive: true });
+  await writeFile(path.join(root, 'lib/wasm/wasm_exec.js'), '// runtime');
+  await writeFile(path.join(root, 'LICENSE'), 'fixture license');
+  await writeFile(path.join(root, 'sample.go'), 'package sample');
+  await writeFile(path.join(root, 'config.json'), JSON.stringify({ version: 1, output: 'generated', tools: { go: compiler }, input: [
+    { name: 'sample', language: 'go', files: ['sample.go'], exports: { Value: { result: 'f64' } } },
+  ] }));
+  const env = { ...process.env, WASMGEN_TEST_GOROOT: root };
+  const args = [cli, 'gen', '--config', 'config.json'];
+  const result = await execute(process.execPath, args, { cwd: root, env });
+  assert.match(result.stdout, /generated sample/);
+  assert.match(result.stderr, /building sample \(go\)/);
+  const previous = await readFile(path.join(root, 'generated/.wasmgen.json'), 'utf8');
+  const marker = path.join(root, 'ready');
+  const running = execute(process.execPath, args, { cwd: root, env: { ...env, WASMGEN_TEST_READY_FILE: marker } });
+  const outcome = running.then(() => undefined, (error: unknown) => error);
+  t.after(() => { running.child.kill('SIGKILL'); });
+  let ready = false;
+  for (let attempt = 0; attempt < 200; attempt++) {
+    if ((await readdir(root)).includes('ready')) { ready = true; break; }
+    await setTimeout(10);
+  }
+  assert(ready, 'compiler must be running before interrupt');
+  running.child.kill('SIGINT');
+  const failure = await outcome;
+  assert(failure instanceof Error && 'stderr' in failure);
+  assert.match(String(failure.stderr), /aborted|interrupted/);
+  assert.equal(await readFile(path.join(root, 'generated/.wasmgen.json'), 'utf8'), previous);
+  assert(!(await readdir(root)).some(file => file.startsWith('.wasmgen-') || file.endsWith('.wasmgen-lock')));
+});

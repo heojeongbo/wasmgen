@@ -29,6 +29,10 @@ test('tool-reported paths retain significant whitespace before the newline', asy
   assert.equal(await run(process.execPath, [fixture, 'path-with-space']), '/tmp/toolchain directory ');
 });
 
+test('compiler failures retain stdout when stderr is empty', async () => {
+  await assert.rejects(run(process.execPath, ['-e', 'process.stdout.write("failure on stdout");process.exitCode=7']), /exited with 7\nfailure on stdout/);
+});
+
 test('excessive compiler stdout fails explicitly instead of returning partial data', async () => {
   await assert.rejects(run(process.execPath, [fixture, 'overflow']), /stdout exceeded/);
 });

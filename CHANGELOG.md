@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.2.3
+
+- Added per-file 100% statement, branch, function and line coverage checks to
+  `pnpm test`, with TypeScript source maps and HTML/JSON reports. Untested runtime
+  modules count toward the threshold; coverage suppression directives are rejected.
+- Added failure, rollback, cancellation, protocol, native compiler orchestration
+  and generated-client tests alongside the real browser E2E matrix.
+- Release output locks even when staging cleanup fails, and retain the original
+  compiler cancellation signal when a caller mutates its options object.
+- Removed redundant checks already enforced by configuration/protocol validation.
 
 - Added a TypeScript benchmark harness for CLI generation, generated module sizes,
   browser initialization and sequential scalar/array Worker round trips across

@@ -7,15 +7,17 @@ const maxStdoutBytes = 32 * 1024 * 1024;
 // No shell: paths and compiler arguments are passed as distinct values.
 export function run(command: string, args: string[], options: RunOptions = {}): Promise<string> {
   return new Promise<string>((resolve, reject) => {
-    options.signal?.throwIfAborted();
+    const signal = options.signal;
+    signal?.throwIfAborted();
     const processGroup = process.platform !== 'win32';
-    const child = spawn(command, args, { cwd: options.cwd, env: options.env ?? process.env, stdio: ['ignore', 'pipe', 'pipe'], signal: options.signal, detached: processGroup });
+    const child = spawn(command, args, { cwd: options.cwd, env: options.env ?? process.env, stdio: ['ignore', 'pipe', 'pipe'], signal, detached: processGroup });
     let stdout = '';
     let stdoutBytes = 0;
     let stderr = '';
     let failure: Error | undefined;
     let stopping = false;
     let killTimer: ReturnType<typeof setTimeout> | undefined;
+    let removeAbortListener = () => {};
     const sendSignal = (signal: NodeJS.Signals) => {
       if (processGroup && child.pid) {
         try { process.kill(-child.pid, signal); }
@@ -27,10 +29,6 @@ export function run(command: string, args: string[], options: RunOptions = {}): 
       stopping = true;
       sendSignal('SIGTERM');
       killTimer = setTimeout(() => sendSignal('SIGKILL'), 1000);
-    };
-    const abort = () => {
-      failure ??= new Error(`cannot run ${command}: compilation aborted`, { cause: options.signal?.reason });
-      stop();
     };
     // Streaming decoders retain partial UTF-8 characters between data events.
     child.stdout.setEncoding('utf8');
@@ -55,11 +53,18 @@ export function run(command: string, args: string[], options: RunOptions = {}): 
       // Stop survivors in our own process group before scratch cleanup begins.
       if (stopping) sendSignal('SIGKILL');
       clearTimeout(killTimer);
-      options.signal?.removeEventListener('abort', abort);
+      removeAbortListener();
       if (failure) reject(failure);
       else if (code === 0) resolve(stdout.replace(/\r?\n$/, ''));
       else reject(new Error(`${command} exited with ${signal ?? code}\n${stderr || stdout}`));
     });
-    options.signal?.addEventListener('abort', abort, { once: true });
+    if (signal) {
+      const abort = () => {
+        failure ??= new Error(`cannot run ${command}: compilation aborted`, { cause: signal.reason });
+        stop();
+      };
+      signal.addEventListener('abort', abort, { once: true });
+      removeAbortListener = () => signal.removeEventListener('abort', abort);
+    }
   });
 }

@@ -41,7 +41,7 @@ export async function serve(initialize: () => Promise<NativeCall>, schema: Schem
     try {
       if (!Object.hasOwn(schema, method) || !schema[method]) throw new Error(`unknown function ${method}`);
       const fn = schema[method];
-      if (!Array.isArray(args) || args.length !== fn.params.length) throw new TypeError(`${method}: expected ${fn.params.length} arguments`);
+      if (args.length !== fn.params.length) throw new TypeError(`${method}: expected ${fn.params.length} arguments`);
       fn.params.forEach((param, index) => check(args[index], param.type, `${method}.${param.name}`));
       const result = await call(method, args);
       if (!result.ok) throw new Error(result.error);

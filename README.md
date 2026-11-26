@@ -66,7 +66,7 @@ pnpm exec vite preview examples/web --base=/demo/
 ```
 
 To test a local build of the generator in another project, run `pnpm pack` here,
-then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.2.2.tgz`
+then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.2.3.tgz`
 there. This does not publish anything. Its runtime npm dependencies are the
 public `yaml`, `zod`, and `smol-toml` packages. Installation has no install/postinstall scripts
 or native builds; `prepack` compiles TypeScript when packaging the generator.
@@ -471,6 +471,13 @@ pnpm test
 pnpm run test:e2e
 pnpm run test:package
 ```
+
+`pnpm test` requires **100% statements, branches, functions and lines per file**
+across executable `src/**/*.ts`. It includes untested modules and fails below any
+threshold. The 0.2.3 suite passes 110 tests at 100% in all four metrics.
+HTML and JSON reports are written to `.artifacts/coverage/`.
+See [test coverage scope and workflow](docs/testing.md) for type-only modules,
+compiler fault injection, and the separate real-Wasm browser checks.
 
 `test:e2e` compiles real Go/C++/Rust, checks TypeScript declarations, and runs
 Chromium, Firefox, and WebKit against Vite development and production output.
