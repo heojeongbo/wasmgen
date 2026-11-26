@@ -4,6 +4,7 @@ import path from 'node:path';
 import { run } from '../../src/process.js';
 import { runBrowsers } from './browser.js';
 import { nativeSnapshot } from './native-snapshot.js';
+import { collisionSymbols, prepareCppCollisionFixture, type CollisionClient } from './cpp-fixture.js';
 
 interface AddClient { add(value: number): Promise<number>; dispose(): void }
 type Clamp = (value: number, low: number, high: number) => Promise<number>;
@@ -13,6 +14,7 @@ type PackageGlobals = typeof globalThis & { __wasmgenTest: {
   rustCalc: () => Promise<AddClient>;
   rustPatch: () => Promise<AddClient>;
   rustReplace: () => Promise<AddClient>;
+  collisions: () => Promise<CollisionClient>;
 } };
 
 const artifacts = path.resolve('.artifacts');
@@ -37,12 +39,14 @@ const installedManifest = JSON.parse(await readFile(path.join(consumer, 'node_mo
 assert.equal(await run(path.join(consumer, 'node_modules/.bin/wasmgen'), ['--version'], { cwd: consumer }), installedManifest.version);
 await cp('test/fixtures', path.join(consumer, 'native'), { recursive: true });
 await cp('examples/cpp', path.join(consumer, 'native/cpp'), { recursive: true });
+const collisions = await prepareCppCollisionFixture(path.join(consumer, 'native'));
 const rustLock = await readFile(path.join(consumer, 'native/rust-workspace/Cargo.lock'), 'utf8');
 const nativeBefore = await nativeSnapshot(path.join(consumer, 'native'));
 const root = path.join(consumer, 'web');
 await mkdir(root);
 await writeFile(path.join(consumer, 'wasmgen.json'), JSON.stringify({
   version: 1, output: './web/generated', input: [
+    collisions,
     { name: 'output', language: 'go', package: './native/go-module/internal/calc', exports: {
       add: { symbol: 'Add', params: [{ name: 'value', type: 'f64' }], result: 'f64' },
     } },
@@ -75,7 +79,7 @@ import { generate, readConfig } from '@heojeongbo/wasmgen';
 const reason = new Error('cancel before config IO');
 await assert.rejects(generate('missing-config.json', { signal: AbortSignal.abort(reason) }), error => error === reason);
 console.log((await readConfig('wasmgen.json')).input.length);
-`], { cwd: consumer }), '5');
+`], { cwd: consumer }), '6');
 assert(!(await readdir(path.join(consumer, 'native/go-module/internal/calc'))).some((entry) => entry.startsWith('.wasmgen-')), 'temporary Go wrapper must be removed');
 assert.equal(await readFile(path.join(consumer, 'native/rust-workspace/Cargo.lock'), 'utf8'), rustLock, 'the original Rust lockfile must remain unchanged');
 assert.deepEqual((await readdir(path.join(consumer, 'native/rust-workspace'))).sort(), ['Cargo.lock', 'Cargo.toml', 'calc', 'offset']);
@@ -93,8 +97,8 @@ for (const directory of ['./native/rust-workspace', './native/rust-binary']) {
   assert.deepEqual(await nativeSnapshot(path.join(consumer, 'native')), nativeBeforeInvalid);
 }
 await writeFile(path.join(root, 'index.html'), '<!doctype html><html lang="en"><meta charset="utf-8"><title>wasmgen installed package</title><h1>wasmgen · installed package</h1><pre id="result">Running…</pre><script type="module" src="./main.ts"></script></html>');
-await writeFile(path.join(root, 'main.ts'), `import { output as calc, previous as geometry, rustCalc, rustPatch, rustReplace } from './generated/index.js';
-Object.assign(globalThis, { __wasmgenTest: { calc, geometry, rustCalc, rustPatch, rustReplace } });
+await writeFile(path.join(root, 'main.ts'), `import { output as calc, previous as geometry, rustCalc, rustPatch, rustReplace, collisions } from './generated/index.js';
+Object.assign(globalThis, { __wasmgenTest: { calc, geometry, rustCalc, rustPatch, rustReplace, collisions } });
 async function typeContract() {
   const api = await calc();
   const value: number = await api.add(1);
@@ -127,6 +131,12 @@ await runBrowsers(root, async (page) => {
     } finally { go.dispose(); cpp.dispose(); rust.dispose(); patched.dispose(); replaced.dispose(); }
   });
   assert.deepEqual(results, { goInternalWithReplace: 42, cpp: 10, cppRuntimeNames: [10, 10, 10], rustWorkspaceDependency: 42, rustRootPatch: 42, rustRootReplace: 84 });
-  return results;
+  const nativeNames = await page.evaluate(async (symbols) => {
+    const client = await (globalThis as PackageGlobals).__wasmgenTest.collisions();
+    try { return { scalars: await Promise.all(symbols.map(symbol => client[symbol](21))), array: await client.value([21, -0, 0]) }; }
+    finally { client.dispose(); }
+  }, collisionSymbols);
+  assert.deepEqual(nativeNames, { scalars: collisionSymbols.map(() => 42), array: [42, -0, 0] });
+  return { ...results, nativeNames };
 }, 'package');
 await writeFile(path.join(artifacts, 'package-contents.json'), JSON.stringify(packed, null, 2) + '\n');

@@ -15,7 +15,11 @@ function check(value: unknown, type: ResultType, at: string): void {
   }
   let valid;
   switch (type) {
-    case 'string': valid = typeof value === 'string'; break;
+    case 'string':
+      // In Unicode mode valid surrogate pairs are a single code point, so this
+      // range matches only lone surrogates that cannot round-trip through UTF-8.
+      if (typeof value === 'string' && /[\uD800-\uDFFF]/u.test(value)) throw new TypeError(`${at}: expected well-formed Unicode string`);
+      valid = typeof value === 'string'; break;
     case 'bool': valid = typeof value === 'boolean'; break;
     case 'f64': valid = typeof value === 'number' && Number.isFinite(value); break;
     case 'i32': valid = typeof value === 'number' && Number.isInteger(value) && value >= -2147483648 && value <= 2147483647; break;

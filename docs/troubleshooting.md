@@ -74,6 +74,18 @@ Runtime validation rejects wrong argument counts, numeric ranges, nonfinite
 `f64` values and sparse arrays. Pass plain arrays, not typed arrays. Ordinary
 native errors reject one call and allow later calls to continue.
 
+`expected well-formed Unicode string` means the input or result contains a lone
+UTF-16 surrogate. Pass complete Unicode characters; splitting a JavaScript string
+in the middle of an emoji can create invalid input. wasmgen rejects it instead of
+silently converting it differently in each native language. NUL is supported.
+Use a separate byte-oriented native interface when text is not the intended data.
+
+In versions through `0.2.5`, C++ symbols such as `val` can silently call a bridge
+helper instead of your function; `arg0`/`call_0` can fail compilation. Upgrade to
+`0.2.6` and regenerate. This release also rejects case-colliding module names and
+Go file basenames, and fixes quoted C++ header paths. Installing the new generator
+alone does not update already-generated browser assets.
+
 Abort, timeout, disposal or a fatal Wasm trap closes the entire client, including
 queued calls. Create a new client to recover. The default timeout is 30 seconds
 for initialization and each call, including time spent waiting behind other calls.

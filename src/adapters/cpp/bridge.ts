@@ -15,7 +15,7 @@ export function cppBridge(mod: ResolvedInput): string {
     arg${i}.reserve(size${i});
     for (std::uint32_t j = 0; j < size${i}; ++j) arg${i}.push_back(args[${i}][j].as<${scalar}>());`;
     }).join('\n');
-    const call = `${fn.symbol}(${fn.params.map((_, i) => `arg${i}`).join(', ')})`;
+    const call = `::${fn.symbol}(${fn.params.map((_, i) => `arg${i}`).join(', ')})`;
     let invoke;
     if (fn.result === 'void') invoke = `    ${call};\n    result.set("value", val::undefined());`;
     else if (fn.result.endsWith('[]')) invoke = `    const auto value = ${call};
@@ -45,13 +45,14 @@ ${invoke}
 #include <string>
 #include <vector>
 #include <emscripten/bind.h>
-${mod.headers.map((header) => `#include ${JSON.stringify(header)}`).join('\n')}
+${mod.headers.map(header => header.includes('>') ? `#include "${header}"` : `#include <${header}>`).join('\n')}
 namespace {
 using emscripten::val;
 ${functions}
-}
+// Register inside this scope so global native overloads cannot hide wrappers.
 EMSCRIPTEN_BINDINGS(wasmgen_module) {
 ${mod.exports.map((_, index) => `  emscripten::function("wasmgen_call_${index}", &call_${index});`).join('\n')}
+}
 }
 `;
 }

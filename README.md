@@ -67,7 +67,7 @@ pnpm exec vite preview examples/web --base=/demo/
 ```
 
 To test a local build of the generator in another project, run `pnpm pack` here,
-then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.2.5.tgz`
+then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.2.6.tgz`
 there. This does not publish anything. Its runtime npm dependencies are the
 public `yaml`, `zod`, and `smol-toml` packages. Installation has no install/postinstall scripts
 or native builds; `prepack` compiles TypeScript when packaging the generator.
@@ -191,6 +191,11 @@ terminated. Create a new client after a panic.
 Numeric arguments/results are validated at runtime; `f64` requires finite values.
 Floating-point scalar/array arguments and results preserve the sign of `-0`.
 `i32` and `u32` enforce their integer ranges. Nil Go slices become empty arrays.
+Strings must contain well-formed Unicode: lone UTF-16 surrogates reject the call
+before native dispatch, and ill-formed JavaScript string results are rejected too.
+Empty strings, embedded NUL, and valid surrogate pairs (including emoji) are
+supported. Native `std::string`/Go string values intended as text must contain
+valid UTF-8; arbitrary bytes are not part of the string contract.
 For Go functions returning `(T, error)`, add `error: true` to the export; use
 `result: void` for functions returning only `error`.
 
@@ -214,11 +219,15 @@ custom parameter types, or APIs that differ from this table. C++ const-reference
 parameters and templates work when callable with the generated argument types.
 `dispose` and `then` cannot be exported as function names; `then` also cannot
 be a module name because dynamic imports would treat it as a Promise callback.
+Module names must be unique ignoring case, including on case-sensitive hosts,
+so `Calc` and `calc` cannot produce conflicting output directories.
 
 Go has two input modes:
 
 - `files`: selected `.go` files from one non-main package, with standard-library
   imports only. Files are compiled in an isolated temporary module with `GOWORK=off`.
+  Basenames must be distinct after Unicode NFC normalization and lowercasing;
+  `Logic.go` and `logic.go` are rejected before any files are copied.
 - `package`: an importable package directory in an existing Go module. This
   preserves module dependencies, `replace`, workspace resolution, and `internal`
   visibility. The package directory must be writable: a temporary wrapper directory
@@ -482,7 +491,7 @@ pnpm run test:package
 
 `pnpm test` requires **100% statements, branches, functions and lines per file**
 across executable `src/**/*.ts`. It includes untested modules and fails below any
-threshold. The 0.2.5 suite passes 120 tests at 100% in all four metrics.
+threshold. The 0.2.6 suite passes 127 tests at 100% in all four metrics.
 HTML and JSON reports are written to `.artifacts/coverage/`.
 See [test coverage scope and workflow](docs/testing.md) for type-only modules,
 compiler fault injection, and the separate real-Wasm browser checks.

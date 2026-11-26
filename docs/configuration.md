@@ -19,7 +19,7 @@ when using a published version.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `name` | Yes | Unique module name and generated TypeScript factory export. |
+| `name` | Yes | Module name, unique ignoring case, and generated TypeScript factory export. |
 | `language` | Yes | `go`, `cpp`, or `rust`. |
 | `files` | Depends on language | Explicit list of source files. An empty list is invalid; omit it when unused. |
 | `package` | Depends on language | Go package or concrete Rust library directory. |
@@ -35,6 +35,15 @@ when using a published version.
 
 Go and Rust do not accept nonempty `headers` or `include`. See the README's
 [native interface](../README.md#native-interface) for dependency handling and type mappings.
+Go file basenames are compared after Unicode NFC normalization and lowercasing;
+source staging also refuses to overwrite an existing file. Module names are ASCII
+identifiers and are compared ignoring case on every host.
+C++ declaration headers are included only by the generated bridge, after its
+standard-header prelude. Literal paths (including quotes/backslashes on POSIX)
+and relative includes within those headers are preserved. A resolved header path
+cannot contain both a double quote and `>`: neither C++ header-name delimiter can
+represent that combination. `check` rejects it, including when those characters
+come from the directory containing the config.
 `check` validates paths and config rules. `gen` checks package/library suitability
 and compiles the declared native calls. Native implicit conversions still apply;
 configuration does not infer or establish exact native signatures. The Worker
@@ -54,6 +63,11 @@ Value types are `i32`, `u32`, `f64`, `bool`, `string`, `i32[]`, `u32[]`, and
 Structs, pointers, `int64`, callbacks and nested arrays are not supported.
 `f64` values must be finite; scalar and array transfers preserve negative zero
 (`Object.is(value, -0)`), including Go's JSON bridge.
+`string` requires well-formed Unicode. Lone UTF-16 surrogates reject with
+`expected well-formed Unicode string`; valid pairs, embedded NUL and empty strings
+are allowed. Argument rejection occurs before native dispatch and leaves the client
+usable. JavaScript string results receive the same validation. Native text must
+be valid UTF-8; the string type is not an arbitrary byte transport.
 
 Module, function and parameter names must match `[A-Za-z_][A-Za-z0-9_]*` and
 must not be reserved JavaScript/TypeScript identifiers. `arguments`, `eval`,
@@ -62,6 +76,9 @@ must not be reserved JavaScript/TypeScript identifiers. `arguments`, `eval`,
 Promise assimilation. Use `symbol` to expose a native function under another name.
 These rules do not restrict ordinary names such as `hasOwnProperty` in the current
 checkout; compiler bindings use private names.
+C++ native symbols resolve from global scope (for example `::val` or
+`::math::add`), independently of generated locals and wrapper names. Write `val`
+or `math::add` in the configuration; the generator supplies the leading `::`.
 
 ## Tool overrides
 

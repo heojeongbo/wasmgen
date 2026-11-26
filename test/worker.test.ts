@@ -61,7 +61,7 @@ test('a fatal Wasm trap prevents queued calls from entering damaged native state
 
 test('Worker validates all scalar/array boundaries and void/nil result normalization', async () => {
   const cases: Array<{ type: ResultType; valid: unknown[]; invalid: unknown[] }> = [
-    { type: 'string', valid: ['', '한글'], invalid: [1] },
+    { type: 'string', valid: ['', '한글🦀', '\0A\0', '\uD7FF\uE000', '\uD800\uDC00', '\uDBFF\uDFFF'], invalid: [1, '\uD800', '\uDC00', 'A\uDBFF', '\uD800A', '\uDC00\uD800'] },
     { type: 'bool', valid: [true, false], invalid: ['true'] },
     { type: 'f64', valid: [0, -1.5], invalid: ['1', NaN, Infinity] },
     { type: 'i32', valid: [-2147483648, 2147483647], invalid: ['1', 1.5, -2147483649, 2147483648] },
@@ -92,6 +92,19 @@ test('Worker validates all scalar/array boundaries and void/nil result normaliza
     await tick();
     assert.deepEqual(messages.at(-1), { type: 'result', id: 1, ok: true, value: expected });
   }
+});
+
+test('Worker rejects ill-formed native string results and still processes later calls', async () => {
+  const messages: WorkerResponse[] = [];
+  const scope: WorkerScope = { onmessage: null, postMessage: message => { messages.push(message); } };
+  let calls = 0;
+  await serve(async () => () => ({ ok: true, value: ++calls === 1 ? '\uD800' : '한글🦀\0' }), { value: { params: [], result: 'string' } }, scope);
+  for (const id of [1, 2]) scope.onmessage?.(new MessageEvent('message', { data: { id, method: 'value', args: [] } }));
+  await tick();
+  assert.deepEqual(messages.slice(1), [
+    { type: 'result', id: 1, ok: false, error: 'value result: expected well-formed Unicode string' },
+    { type: 'result', id: 2, ok: true, value: '한글🦀\0' },
+  ]);
 });
 
 test('Worker reports initialization, arity, native-result and schema failures', async () => {

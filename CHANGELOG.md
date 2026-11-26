@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.6
+
+- Qualify C++ native calls and register generated wrappers inside their own scope.
+  Global functions such as `val`, `args`, `result`, `arg0` and `call_0` now invoke
+  the declared implementation instead of colliding with bridge internals.
+- Encode C++ declaration paths as literal header names instead of JSON strings.
+  Paths with quotes or backslashes retain their original relative-include behavior.
+  Reject paths containing both a double quote and `>` during config validation,
+  including characters inherited from the config directory.
+- Reject module names that differ only by case. Reject Go file basenames that
+  collide after Unicode NFC normalization and lowercasing, and copy sources
+  exclusively so filesystem-specific aliases cannot silently overwrite a source.
+- Define `string` as well-formed Unicode. Reject lone UTF-16 surrogates in browser
+  arguments/results; embedded NUL, valid surrogate pairs and empty strings remain
+  supported. Regenerate existing clients to receive this runtime validation.
+- Add real-compiler installed-package regressions for C++ names/path handling and
+  cross-language numeric/Unicode boundary checks in all three browser engines.
+
 ## 0.2.5
 
 - Capture generation's original cancellation signal and progress callback before

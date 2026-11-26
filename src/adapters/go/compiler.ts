@@ -6,6 +6,7 @@ import { workerSource } from './worker.js';
 import { z } from 'zod';
 import { hasCode, throwFailures } from '../../shared/errors.js';
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import path from 'node:path';
 import { run } from '../../process.js';
 
@@ -28,7 +29,7 @@ async function build(mod: ResolvedInput, { directory, scratch, tools, signal }: 
     } else {
       await mkdir(path.join(scratch, 'native'));
       await writeFile(path.join(scratch, 'go.mod'), 'module wasmgen.local/generated\n\ngo 1.22\n');
-      for (const file of mod.files) await copyFile(file, path.join(scratch, 'native', path.basename(file)));
+      for (const file of mod.files) await copyFile(file, path.join(scratch, 'native', path.basename(file)), constants.COPYFILE_EXCL);
     }
     await writeFile(path.join(buildRoot, 'main.go'), goBridge(mod, importPath));
     await run(go, ['build', '-trimpath', '-ldflags=-s -w', '-o', path.join(directory, 'native.wasm'), '.'], { cwd: buildRoot, env, signal });

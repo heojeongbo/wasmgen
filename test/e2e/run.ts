@@ -3,6 +3,7 @@ import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { runBrowsers } from './browser.js';
 import { exerciseRust } from './rust.js';
+import { exerciseBoundaries } from './boundaries.js';
 
 import type * as Generated from '../../examples/web/generated/index.js';
 type BrowserGlobals = typeof globalThis & { __wasmgenTest: typeof Generated };
@@ -142,8 +143,9 @@ await runBrowsers(root, async (page) => {
   assert.match(values.abortPending, /abort pending computation/);
   assert.match(values.timeout, /timed out/);
   const rust = await exerciseRust(page);
+  const boundaries = await exerciseBoundaries(page);
   // Only the three live example clients remain after all test instances close.
   await Promise.all(page.workers().slice(3).map((worker) => worker.waitForEvent('close', { timeout: 15_000 })));
   assert.equal(page.workers().length, 3, 'disposed workers must not leak');
-  return { ...values, rust };
+  return { ...values, rust, boundaries };
 }, 'browser');

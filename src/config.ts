@@ -53,14 +53,15 @@ export function validateConfig(value: unknown, configPath: string, validators: I
   const names = new Set<string>();
   const input = raw.input.map((entry): ResolvedInput => {
     const at = entry.name;
-    if (names.has(at)) throw new Error(`${at}: duplicate module`);
-    names.add(at);
-    validators[entry.language].validateInput(entry);
+    if (names.has(at.toLowerCase())) throw new Error(`${at}: duplicate module (names must be unique ignoring case)`);
+    names.add(at.toLowerCase());
     const resolve = (files: string[] = []) => files.map((file) => path.resolve(root, file));
     const files = resolve(entry.files);
     const headers = resolve(entry.headers);
     const include = resolve(entry.include);
     const pkg = entry.package ? path.resolve(root, entry.package) : undefined;
+    // Adapter path rules must see the config directory as well as user entries.
+    validators[entry.language].validateInput({ ...entry, files: entry.files && files, headers: entry.headers && headers, include: entry.include && include, package: pkg });
     const exports = Object.entries(entry.exports).map(([name, fn]) => {
       const symbol = fn.symbol ?? name;
       if (new Set(fn.params.map((param) => param.name)).size !== fn.params.length) throw new Error(`${at}.${name}: duplicate parameter`);

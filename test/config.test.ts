@@ -24,6 +24,7 @@ const cases: Array<[string, unknown, RegExp]> = [
   ['unknown setting', { ...valid(), out: 'typo' }, /out/],
   ['unsupported type', withFunction({ result: 'int64' }), /Invalid option/],
   ['duplicate modules', { ...valid(), input: [...valid().input, ...valid().input] }, /duplicate module/],
+  ['case-colliding modules', { ...valid(), input: [valid().input[0], { ...valid().input[0], name: 'Math' }] }, /duplicate module.*ignoring case/],
   ['reserved export', withInput({ exports: { dispose: { symbol: 'Dispose', result: 'void' } } }), /Invalid key/],
   ['thenable export', withInput({ exports: { then: { symbol: 'Then', result: 'void' } } }), /Invalid key/],
   ['thenable module', withInput({ name: 'then' }), /Promise assimilation/],
@@ -32,8 +33,11 @@ const cases: Array<[string, unknown, RegExp]> = [
   ['output contains input', { ...valid(), output: '.' }, /must not contain input/],
   ['package and files', withInput({ package: '.' }), /exactly one/],
   ['duplicate Go basenames', withInput({ files: ['./math.go', './other/math.go'] }), /duplicate Go basenames/],
+  ['case-colliding Go basenames', withInput({ files: ['./Logic.go', './other/logic.go'] }), /duplicate Go basenames.*ignoring case/],
+  ['normalized Go basename collisions', withInput({ files: ['./caf\u00e9.go', './other/cafe\u0301.go'] }), /duplicate Go basenames.*Unicode normalization/],
   ['C++ missing declarations', withInput({ language: 'cpp' }), /requires declarations/],
   ['C++ package input', withInput({ language: 'cpp', package: './native' }), /package is only valid/],
+  ['unrepresentable C++ header path', withInput({ language: 'cpp', headers: ['native"with>both.h'] }), /headers\[0\].*cannot contain both/],
   ['C++ error option', withInput({ language: 'cpp', headers: ['a.h'], exports: { value: { result: 'void', error: false } } }), /error is only valid/],
   ['Go test file', withInput({ files: ['math_test.go'] }), /non-test .go/],
   ['Go wrong file extension', withInput({ files: ['math.cc'] }), /non-test .go/],
@@ -50,6 +54,10 @@ for (const [name, config, message] of cases) {
     assert.throws(() => validateConfig(config, '/project/wasmgen.yaml'), message);
   });
 }
+
+test('C++ path validation accounts for characters in the config directory', () => {
+  assert.throws(() => validateConfig(withInput({ language: 'cpp', headers: ['api.h'] }), '/project/"quoted>directory/wasmgen.yaml'), /headers\[0\].*cannot contain both/);
+});
 
 test('Rust packages support qualified symbols, fallible results and separate tool overrides', () => {
   const config = validateConfig({ ...withInput({ language: 'rust', files: undefined, package: './crate', exports: { add: { symbol: 'math::add', result: 'f64', error: true } } }), tools: { cargo: '/tools/cargo', wasmBindgen: '/tools/wasm-bindgen' } }, '/project/wasmgen.yaml');

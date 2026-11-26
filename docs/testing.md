@@ -15,7 +15,7 @@ pnpm run test:package
 
 `pnpm test` invokes `pnpm run test:coverage`. Both require 100% **statements,
 branches, functions and lines for every executable production file**, not just an
-aggregate percentage. Version 0.2.5 passes 120 tests with 100% in all four metrics.
+aggregate percentage. Version 0.2.6 passes 127 tests with 100% in all four metrics.
 
 The scope is the complete generator and browser runtime in `src/**/*.ts`: CLI,
 configuration, language adapters, bridge/code generation, output transactions,
@@ -74,6 +74,16 @@ Cargo and wasm-bindgen, generated declarations, and Chromium/Firefox/WebKit in
 development and production. Package tests install the actual packed archive into
 a separate consumer. Run these suites sequentially because build/example outputs
 are shared.
+
+The installed-package fixture exercises C++ native names that collide with bridge
+locals/helpers, scalar and vector results, and headers whose POSIX paths contain
+quotes, spaces and backslashes. Nested includes and separate translation units
+verify that declaration headers affect only the generated bridge.
+Cross-language browser checks compare finite numeric boundaries (including signed
+zero and subnormal values), reject overflow and malformed Unicode, preserve valid
+Unicode/NUL, and confirm the client still works after rejected calls. Configuration
+tests reject case-colliding module/Go filenames; a staging test prevents source
+overwrite even when callers bypass normal config validation.
 
 Before release, require passing coverage, type/architecture checks and both browser
 suites on the release contents. Inspect the tarball, then verify public registry

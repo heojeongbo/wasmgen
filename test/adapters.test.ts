@@ -100,6 +100,17 @@ test('Go package wrappers preserve internal visibility and are removed on failur
   }
 });
 
+test('Go file staging cannot silently overwrite an earlier source', async (t) => {
+  const f = await fixture(t, 'go');
+  await mkdir(path.join(f.native, 'second'));
+  const second = path.join(f.native, 'second/source.go');
+  await writeFile(second, '// must not replace the first input');
+  f.mod.files.push(second);
+  await assert.rejects(goAdapter.build(f.mod, f.context), (error: unknown) => error instanceof Error && 'code' in error && error.code === 'EEXIST');
+  assert.equal(await readFile(path.join(f.context.scratch, 'native/source.go'), 'utf8'), '// native fixture');
+  assert.equal(f.calls.length, 0, 'must stop before compiling a partial source set');
+});
+
 test('Go propagates runtime and license IO failures instead of hiding them as missing files', async (t) => {
   for (const failure of ['runtime', 'license']) {
     const f = await fixture(t, 'go');
@@ -144,6 +155,8 @@ test('Go wrapper cleanup preserves compilation errors and reports cleanup-only f
 test('C++ compilation passes includes as arguments and links without dynamic JS execution', async (t) => {
   for (const custom of [false, true]) {
     const f = await fixture(t, 'cpp');
+    f.mod.headers.push(path.join(f.native, 'with "quotes" and \\backslash.h'));
+    f.mod.headers.push(path.join(f.native, 'with >bracket.h'));
     if (custom) f.context.tools.cpp = '/tools/custom-em++';
     const compiled = await cppAdapter.build(f.mod, f.context);
     assert.equal(f.calls.length, 3);
@@ -154,6 +167,8 @@ test('C++ compilation passes includes as arguments and links without dynamic JS 
     assert(f.calls.every(call => call.options?.signal === f.context.signal));
     assert.match(compiled.workerSource, /"scalar": native.wasmgen_call_0/);
     const bridge = await readFile(path.join(f.context.scratch, 'bridge.cc'), 'utf8');
+    assert(bridge.includes(`#include <${f.mod.headers[1]}>`));
+    assert(bridge.includes(`#include "${f.mod.headers[2]}"`));
     assert.match(bridge, /std::vector<double>/);
     assert.match(bridge, /val::undefined/);
     assert.equal((await readdir(path.join(f.context.directory, 'licenses'))).length, 5);

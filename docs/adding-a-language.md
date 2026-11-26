@@ -79,6 +79,8 @@ and compatibility before changing the shared model.
 2. **Validate without compiling.** Implement `validateInput(ParsedInput): void`.
    Reject unsupported combinations, native symbols and signature modes with
    actionable messages. `wasmgen check` must still work without this toolchain.
+   The shared resolver passes absolute input paths and preserves omitted fields;
+   validate the complete paths, including the config directory's characters.
    Compiler availability, native signature matching and dependency resolution
    belong to generation.
 3. **Generate a narrow bridge.** Use the declared `ResolvedInput.exports`, mapping
@@ -86,6 +88,14 @@ and compatibility before changing the shared model.
    convention where bindings expose properties; public names must not collide
    with compiler/runtime internals. Validate native identifiers and use
    `JSON.stringify` for strings embedded in generated JavaScript.
+   Native calls must resolve independently of bridge locals and helper names;
+   test collisions with the names the generated code uses. JavaScript escaping
+   is not a portable encoder for native string literals or C++ header names.
+   Preserve relative include resolution and reject paths that the target syntax
+   cannot represent. Compiler flags such as Clang's `-include` can still synthesize
+   unescaped include directives; argument arrays alone do not fix this boundary.
+   Reject collisions before flattening input paths and never
+   overwrite a previously staged source when the filesystem considers names equal.
 4. **Build native assets.** Implement
    `build(ResolvedInput, BuildContext): Promise<CompiledModule>`. Invoke tools
    through `src/process.ts` with argument arrays and the supplied signal. Keep
@@ -170,6 +180,11 @@ Maintain these semantics:
   plain JavaScript arrays before crossing the boundary. Preserve floating-point
   negative zero in both directions; ordinary `JSON.stringify` turns `-0` into `0`,
   so JSON-based adapters need an explicit representation that their decoder accepts.
+- Strings represent well-formed Unicode, including empty text, NUL and valid
+  surrogate pairs. The shared Worker rejects lone UTF-16 surrogates in arguments
+  and JavaScript results. Native text must be valid UTF-8; test this contract with
+  non-ASCII text and malformed input, rather than relying on the compiler's
+  replacement-character behavior. A rejected argument must not enter native code.
 - Ordinary native errors become `{ ok: false, error }` and reject one call.
   Initialization failure and fatal `WebAssembly.RuntimeError` stop the client.
   Do not convert a fatal trap into an ordinary error and keep using damaged state.
