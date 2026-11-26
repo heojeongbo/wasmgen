@@ -31,8 +31,10 @@ await runBrowsers(root, async (page) => {
         cpp: await cpp.clamp(-3, 0, 10),
         cppString: await cpp.greet('로봇 🦀'),
         cppArray: await cpp.scale([1, -2, 0, 3.5], 2),
+        cppZeroSigns: [Object.is(await cpp.divide(-0, 1), -0), ...(await cpp.scale([-0, 0], 1)).map(value => Object.is(value, -0)), Object.is((await cpp.scale([1], -0))[0], -0)],
         goString: await go.upper('안녕 wasm 🦀'),
         goArray: await go.scale([1, -2, 0, 3.5], 2),
+        goZeroSigns: [Object.is(await go.divide(-0, 1), -0), ...(await go.scale([-0, 0], 1)).map(value => Object.is(value, -0)), Object.is((await go.scale([1], -0))[0], -0)],
         goBool: await go.negate(false),
         signed: await go.signed(-2147483648),
         unsigned: await go.unsigned(4294967295),
@@ -111,8 +113,10 @@ await runBrowsers(root, async (page) => {
   assert.equal(values.cpp, 0);
   assert.equal(values.cppString, 'hello, 로봇 🦀');
   assert.deepEqual(values.cppArray, [2, -4, 0, 7]);
+  assert.deepEqual(values.cppZeroSigns, [true, true, false, true]);
   assert.equal(values.goString, '안녕 WASM 🦀');
   assert.deepEqual(values.goArray, [2, -4, 0, 7]);
+  assert.deepEqual(values.goZeroSigns, [true, true, false, true]);
   assert.equal(values.goBool, true);
   assert.equal(values.signed, -2147483648);
   assert.equal(values.unsigned, 4294967295);

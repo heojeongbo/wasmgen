@@ -4,7 +4,7 @@ import { validateInput } from './config.js';
 import { goBridge } from './bridge.js';
 import { workerSource } from './worker.js';
 import { z } from 'zod';
-import { hasCode } from '../../shared/errors.js';
+import { hasCode, throwFailures } from '../../shared/errors.js';
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { run } from '../../process.js';
@@ -15,6 +15,7 @@ async function build(mod: ResolvedInput, { directory, scratch, tools, signal }: 
   let buildRoot = scratch;
   let externalBuild: string | undefined;
   let importPath = 'wasmgen.local/generated/native';
+  const failures: unknown[] = [];
   try {
     if (mod.package) {
       const metadata = z.object({ Name: z.string(), Dir: z.string(), ImportPath: z.string(), Module: z.object({ Dir: z.string() }).optional() }).parse(JSON.parse(await run(go, ['list', '-json', '.'], { cwd: mod.package, env, signal })) as unknown);
@@ -46,9 +47,15 @@ async function build(mod: ResolvedInput, { directory, scratch, tools, signal }: 
       // Some OS distributions move GOROOT/LICENSE into their package documentation.
       await copyFile(new URL('../../licenses/GO-LICENSE', import.meta.url), path.join(directory, 'GO-LICENSE'));
     }
+  } catch (error) {
+    failures.push(error);
   } finally {
-    if (externalBuild) await rm(externalBuild, { recursive: true, force: true });
+    if (externalBuild) {
+      try { await rm(externalBuild, { recursive: true, force: true }); }
+      catch (error) { failures.push(error); }
+    }
   }
+  throwFailures(failures);
   return { workerSource: workerSource() };
 }
 

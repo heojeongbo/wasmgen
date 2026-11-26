@@ -167,7 +167,9 @@ Maintain these semantics:
 - Parameters/results support `i32`, `u32`, finite `f64`, `bool`, `string` and
   `i32[]`/`u32[]`/`f64[]`; `void` is result-only. The shared Worker checks values,
   argument counts and numeric bounds. Convert language-specific containers to
-  plain JavaScript arrays before crossing the boundary.
+  plain JavaScript arrays before crossing the boundary. Preserve floating-point
+  negative zero in both directions; ordinary `JSON.stringify` turns `-0` into `0`,
+  so JSON-based adapters need an explicit representation that their decoder accepts.
 - Ordinary native errors become `{ ok: false, error }` and reject one call.
   Initialization failure and fatal `WebAssembly.RuntimeError` stop the client.
   Do not convert a fatal trap into an ordinary error and keep using damaged state.

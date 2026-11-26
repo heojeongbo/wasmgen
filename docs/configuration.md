@@ -35,8 +35,10 @@ when using a published version.
 
 Go and Rust do not accept nonempty `headers` or `include`. See the README's
 [native interface](../README.md#native-interface) for dependency handling and type mappings.
-`check` validates paths and config rules, but package/library suitability and native
-signatures are validated by `gen` using the actual compiler.
+`check` validates paths and config rules. `gen` checks package/library suitability
+and compiles the declared native calls. Native implicit conversions still apply;
+configuration does not infer or establish exact native signatures. The Worker
+validates argument/result values against the declared types during browser calls.
 
 ## Exported functions
 
@@ -50,6 +52,8 @@ signatures are validated by `gen` using the actual compiler.
 Value types are `i32`, `u32`, `f64`, `bool`, `string`, `i32[]`, `u32[]`, and
 `f64[]`. Use quotes around array types in inline YAML mappings.
 Structs, pointers, `int64`, callbacks and nested arrays are not supported.
+`f64` values must be finite; scalar and array transfers preserve negative zero
+(`Object.is(value, -0)`), including Go's JSON bridge.
 
 Module, function and parameter names must match `[A-Za-z_][A-Za-z0-9_]*` and
 must not be reserved JavaScript/TypeScript identifiers. `arguments`, `eval`,
@@ -89,6 +93,9 @@ For a filename beginning with a dash, use `--config=--filename`; an ambiguous
 `--config --help` is rejected instead of silently displaying help.
 Failures print a diagnostic to stderr and return
 exit status `1`. Generation progress goes to stderr; success goes to stdout.
+On POSIX hosts, `gen` handles SIGINT/SIGTERM to cancel compilers and clean up;
+the read-only `check` command uses normal signal termination, including during
+pending config IO.
 
 Configuration errors name the selected config file and the relevant field/module.
 Compiler failures name the module and language. The library API preserves the
@@ -113,7 +120,15 @@ a browser runtime or a CommonJS `require` entry point.
   `output` is absolute; `modules` contains factory names in config order.
 - `options.onProgress?: (message: string) => void` receives build progress.
 - `options.signal?: AbortSignal` cancels generation and active compiler execution;
-  cancellation before replacement preserves previous output.
+  cancellation observed before the final output rename starts preserves previous
+  output, including cancellation during the ownership check or backup rename.
+  Once that final filesystem operation starts, it is allowed to finish.
+
+Generation captures the supplied signal and progress callback at invocation.
+Changing those properties on the options object does not reconfigure an active
+generation. An already-aborted signal rejects before reading the config. Aborting
+inside `onProgress` stops before invoking that module's adapter. Cancellation
+during config loading is checked again before acquiring output ownership.
 
 On POSIX hosts, cancellation also stops compiler descendants in the runner's
 process group. SIGTERM is followed by SIGKILL after one second if necessary.

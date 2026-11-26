@@ -15,7 +15,7 @@ pnpm run test:package
 
 `pnpm test` invokes `pnpm run test:coverage`. Both require 100% **statements,
 branches, functions and lines for every executable production file**, not just an
-aggregate percentage. Version 0.2.4 passes 114 tests with 100% in all four metrics.
+aggregate percentage. Version 0.2.5 passes 120 tests with 100% in all four metrics.
 
 The scope is the complete generator and browser runtime in `src/**/*.ts`: CLI,
 configuration, language adapters, bridge/code generation, output transactions,

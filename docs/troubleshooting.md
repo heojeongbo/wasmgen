@@ -103,6 +103,10 @@ Normal failures preserve previous output and clean staging. A hard process kill
 or machine shutdown can leave staging/lock directories or a partially completed
 directory swap; do not assume crash recovery is automatic. Do not retarget
 symlinks or edit the output concurrently with generation.
+Cancellation after creating a backup restores it before releasing the lock, unless
+restoration itself fails; in that case the preserved backup path is reported.
+The final rename that publishes staged output is the commit boundary and cannot
+be interrupted after it has started.
 
 When generation and cleanup both fail, the error message retains each diagnostic,
 including a preserved backup path after failed rollback. The Node API exposes an
@@ -112,6 +116,12 @@ cleanup failure and lock cleanup failure, omitting phases that succeeded;
 failure after a successful replacement can reject generation even though the new
 output is already installed: inspect the output and diagnostic before retrying.
 An unreleased lock still requires the no-running-generator check above.
+
+Go package builds also clean a temporary `.wasmgen-*` wrapper inside the selected
+package. If both compilation and wrapper cleanup fail, the module's build error
+retains an `AggregateError` in its cause chain with both failures. After confirming
+the generation process has exited, use the cleanup diagnostic's path to inspect
+and remove that leftover wrapper. Original package sources remain caller-owned.
 
 ## Public npm installation
 

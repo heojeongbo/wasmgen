@@ -93,3 +93,29 @@ test('CLI generates through its public entrypoint and cancels running compilers 
   assert.equal(await readFile(path.join(root, 'generated/.wasmgen.json'), 'utf8'), previous);
   assert(!(await readdir(root)).some(file => file.startsWith('.wasmgen-') || file.endsWith('.wasmgen-lock')));
 });
+
+test('CLI check honors termination signals while config IO is pending', { skip: process.platform === 'win32', timeout: 10_000 }, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'wasmgen-cli-check-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const helper = fileURLToPath(new URL('./helpers/blocked-config.js', import.meta.url));
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    const marker = path.join(root, signal);
+    const running = execute(process.execPath, ['--experimental-test-module-mocks', helper, cli, path.join(root, 'config.json'), marker]);
+    const outcome = running.then(() => undefined, (error: unknown) => error);
+    try {
+      let ready = false;
+      for (let attempt = 0; attempt < 200; attempt++) {
+        if ((await readdir(root)).includes(signal)) { ready = true; break; }
+        await setTimeout(10);
+      }
+      assert(ready, 'config read must be pending before interruption');
+      running.child.kill(signal);
+      const failure = await Promise.race([outcome, setTimeout(2000, undefined, { ref: false })]);
+      assert(failure instanceof Error && 'signal' in failure, 'check must not swallow termination and keep waiting for IO');
+      assert.equal(failure.signal, signal);
+    } finally {
+      running.child.kill('SIGKILL');
+      await outcome;
+    }
+  }
+});

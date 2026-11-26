@@ -69,7 +69,13 @@ await run(path.join(consumer, 'node_modules/.bin/wasmgen'), ['gen', '--config', 
 // with the generator's staging or backup directories.
 await run(path.join(consumer, 'node_modules/.bin/wasmgen'), ['gen', '--config', 'wasmgen.json'], { cwd: consumer });
 // The package API and CLI must both resolve from the installed tarball.
-assert.equal(await run('node', ['--input-type=module', '-e', 'import { readConfig } from "@heojeongbo/wasmgen"; console.log((await readConfig("wasmgen.json")).input.length)'], { cwd: consumer }), '5');
+assert.equal(await run('node', ['--input-type=module', '-e', `
+import assert from 'node:assert/strict';
+import { generate, readConfig } from '@heojeongbo/wasmgen';
+const reason = new Error('cancel before config IO');
+await assert.rejects(generate('missing-config.json', { signal: AbortSignal.abort(reason) }), error => error === reason);
+console.log((await readConfig('wasmgen.json')).input.length);
+`], { cwd: consumer }), '5');
 assert(!(await readdir(path.join(consumer, 'native/go-module/internal/calc'))).some((entry) => entry.startsWith('.wasmgen-')), 'temporary Go wrapper must be removed');
 assert.equal(await readFile(path.join(consumer, 'native/rust-workspace/Cargo.lock'), 'utf8'), rustLock, 'the original Rust lockfile must remain unchanged');
 assert.deepEqual((await readdir(path.join(consumer, 'native/rust-workspace'))).sort(), ['Cargo.lock', 'Cargo.toml', 'calc', 'offset']);

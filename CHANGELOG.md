@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.5
+
+- Capture generation's original cancellation signal and progress callback before
+  asynchronous config loading. Pre-aborted requests skip config IO, and cancellation
+  from progress stops before starting that module's adapter.
+- Recheck cancellation after output inspection and backup, restoring the previous
+  output before commit. Keep normal SIGINT/SIGTERM termination for `wasmgen check`
+  instead of swallowing signals while config IO is pending.
+- Preserve both Go compilation and temporary-wrapper cleanup failures. Output and
+  adapter cleanup now share the same ordered error aggregation behavior.
+- Preserve negative zero in Go scalar and numeric-array arguments instead of
+  normalizing it to positive zero through JSON serialization. Browser regressions
+  verify the same floating-point behavior across Go, C++ and Rust.
+- Clarified compiler versus runtime validation, cancellation ownership, signed-zero
+  semantics and recovery from Go wrapper cleanup failure. All 120 unit tests retain
+  per-file 100% production TypeScript coverage in all four metrics.
+
 ## 0.2.4
 
 - Retain the browser client's original cancellation signal when callers mutate

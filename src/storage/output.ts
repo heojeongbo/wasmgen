@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, lstat, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
-import { errorMessage, hasCode } from '../shared/errors.js';
+import { hasCode, throwFailures } from '../shared/errors.js';
 
 export async function filesIn(directory: string, prefix = ''): Promise<string[]> {
   const result: string[] = [];
@@ -50,17 +50,22 @@ export async function withOutput(output: string, build: (staging: string, result
     await writeFile(path.join(result, '.wasmgen.json'), JSON.stringify({ generator: 'wasmgen', version: 1, files: await filesIn(result) }, null, 2) + '\n');
     signal?.throwIfAborted();
     // Check again: an editor may have added an unmanaged file during compilation.
-    if (await inspectOutput(output)) {
+    const exists = await inspectOutput(output);
+    signal?.throwIfAborted();
+    if (exists) {
       backup = path.join(staging, 'previous');
       await rename(output, backup);
     }
-    try { await rename(result, output); }
+    try {
+      signal?.throwIfAborted();
+      await rename(result, output);
+    }
     catch (error) {
       if (backup) {
         try { await rename(backup, output); }
         catch (restoreError) {
           preserveStaging = true;
-          throw new AggregateError([error, restoreError], `cannot restore previous output; preserved at ${backup}`);
+          throw new AggregateError([error, restoreError], `cannot restore previous output; preserved at ${backup}`, { cause: error });
         }
       }
       throw error;
@@ -74,6 +79,5 @@ export async function withOutput(output: string, build: (staging: string, result
       catch (error) { failures.push(error); }
     }
   }
-  if (failures.length === 1) throw failures[0];
-  if (failures.length > 1) throw new AggregateError(failures, failures.map(errorMessage).join('; '), { cause: failures[0] });
+  throwFailures(failures);
 }

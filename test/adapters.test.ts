@@ -1,6 +1,7 @@
 import test, { mock, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from 'node:fs/promises';
+import * as fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import * as processes from 'node:child_process';
@@ -11,6 +12,8 @@ import type { ResolvedInput } from '../src/model/config.js';
 import type { BuildContext } from '../src/ports/language.js';
 
 let execute: typeof run;
+let remove: typeof fs.rm = fs.rm;
+mock.module('node:fs/promises', { namedExports: { ...fs, rm: (...args: Parameters<typeof fs.rm>) => remove(...args) } });
 // Mock only the OS boundary. Keeping the real process wrapper also avoids
 // attributing a synthetic module's V8 ranges to production source coverage.
 mock.module('node:child_process', { namedExports: { ...processes, spawn: (tool: string, args: string[], options: processes.SpawnOptions) => {
@@ -29,6 +32,7 @@ const { rustAdapter } = await import('../src/adapters/rust/compiler.js');
 const { preparePackage } = await import('../src/adapters/rust/package.js');
 
 async function fixture(t: TestContext, language: ResolvedInput['language']) {
+  remove = fs.rm;
   const root = await mkdtemp(path.join(os.tmpdir(), 'wasmgen-adapter-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const directory = path.join(root, 'output');
@@ -103,6 +107,37 @@ test('Go propagates runtime and license IO failures instead of hiding them as mi
     if (failure === 'runtime') await mkdir(path.join(f.goroot, 'lib/wasm/wasm_exec.js'));
     else { await writeFile(path.join(f.goroot, 'lib/wasm/wasm_exec.js'), 'runtime'); await mkdir(path.join(f.goroot, 'LICENSE')); }
     await assert.rejects(goAdapter.build(f.mod, f.context), (error: unknown) => error instanceof Error && 'code' in error && error.code === 'EISDIR');
+  }
+});
+
+test('Go wrapper cleanup preserves compilation errors and reports cleanup-only failures', async (t) => {
+  for (const failBuild of [true, false]) {
+    const f = await fixture(t, 'go');
+    f.mod.package = f.native;
+    f.mod.files = [];
+    await mkdir(path.join(f.goroot, 'lib/wasm'), { recursive: true });
+    await writeFile(path.join(f.goroot, 'lib/wasm/wasm_exec.js'), 'runtime');
+    const compile = execute;
+    execute = async (tool, args, options) => {
+      if (failBuild && args[0] === 'build') throw new Error('native compilation failed');
+      return compile(tool, args, options);
+    };
+    const cleanup = new Error('cannot remove temporary Go wrapper');
+    const attempts: string[] = [];
+    remove = async file => { attempts.push(String(file)); throw cleanup; };
+    await assert.rejects(goAdapter.build(f.mod, f.context), failure => {
+      if (!failBuild) return failure === cleanup;
+      assert(failure instanceof AggregateError);
+      assert.equal(failure.errors.length, 2);
+      assert.equal(failure.errors[1], cleanup);
+      assert.equal(failure.cause, failure.errors[0]);
+      assert.match(failure.message, /native compilation failed/);
+      assert.match(failure.message, /cannot remove temporary Go wrapper/);
+      return true;
+    });
+    assert.equal(attempts.length, 1);
+    assert(attempts[0]?.startsWith(f.native + '/.wasmgen-'));
+    assert((await readdir(f.native)).some(entry => entry.startsWith('.wasmgen-')));
   }
 });
 

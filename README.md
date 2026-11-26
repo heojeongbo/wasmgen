@@ -67,7 +67,7 @@ pnpm exec vite preview examples/web --base=/demo/
 ```
 
 To test a local build of the generator in another project, run `pnpm pack` here,
-then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.2.4.tgz`
+then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.2.5.tgz`
 there. This does not publish anything. Its runtime npm dependencies are the
 public `yaml`, `zod`, and `smol-toml` packages. Installation has no install/postinstall scripts
 or native builds; `prepack` compiles TypeScript when packaging the generator.
@@ -111,8 +111,10 @@ pnpm exec wasmgen gen --config wasmgen.yaml
 ```
 
 `check` validates the configuration and input paths without invoking a compiler.
-It does not verify native signatures, compiler availability or dependency resolution;
-`gen` checks signatures during compilation. Neither command executes exported native
+It does not verify native signatures, compiler availability or dependency resolution.
+`gen` compiles the declared calls against native sources; implicit conversions still
+follow the native language's rules. The Worker also validates arguments and results
+against the configured value types. Neither command executes exported native
 functions in a browser. All source/output paths resolve relative to the config.
 The output is exclusively owned by wasmgen: use a dedicated generated directory.
 Failed builds preserve the previous output. Unknown files and symlinks in the
@@ -187,6 +189,7 @@ terminated. Create a new client after a panic.
 | `void` (result only) | `void` | no result | `void` | `()` |
 
 Numeric arguments/results are validated at runtime; `f64` requires finite values.
+Floating-point scalar/array arguments and results preserve the sign of `-0`.
 `i32` and `u32` enforce their integer ranges. Nil Go slices become empty arrays.
 For Go functions returning `(T, error)`, add `error: true` to the export; use
 `result: void` for functions returning only `error`.
@@ -479,7 +482,7 @@ pnpm run test:package
 
 `pnpm test` requires **100% statements, branches, functions and lines per file**
 across executable `src/**/*.ts`. It includes untested modules and fails below any
-threshold. The 0.2.4 suite passes 114 tests at 100% in all four metrics.
+threshold. The 0.2.5 suite passes 120 tests at 100% in all four metrics.
 HTML and JSON reports are written to `.artifacts/coverage/`.
 See [test coverage scope and workflow](docs/testing.md) for type-only modules,
 compiler fault injection, and the separate real-Wasm browser checks.

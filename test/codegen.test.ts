@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { createGenerator } from '../src/application/generate.js';
+import { createGenerator, type GenerateOptions } from '../src/application/generate.js';
 import type { ResolvedConfig } from '../src/model/config.js';
+import type { LanguageCompiler } from '../src/ports/language.js';
 
 test('generation composes injected adapters, emits typed clients and replaces owned output', async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'wasmgen-codegen-'));
@@ -32,4 +33,77 @@ test('generation composes injected adapters, emits typed clients and replaces ow
   controller.abort(new Error('cancelled generation'));
   await assert.rejects(generate('fixture.json', { signal: controller.signal }), /cancelled generation/);
   assert.deepEqual(await readdir(root), ['web']);
+});
+
+async function cancellationFixture(t: test.TestContext, build: LanguageCompiler['build'], read = async () => {}) {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'wasmgen-generation-cancel-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const config: ResolvedConfig = { version: 1, root, output: path.join(root, 'generated'), tools: {}, input: [{
+    name: 'sample', language: 'go', files: [], headers: [], include: [],
+    exports: [{ name: 'value', symbol: 'Value', params: [], result: 'f64', error: false }],
+  }] };
+  const generate = createGenerator({ go: { language: 'go', build }, cpp: { language: 'cpp', build }, rust: { language: 'rust', build } }, async () => { await read(); return config; });
+  return { root, generate };
+}
+
+test('pre-aborted generation does not read config or start a build', async (t) => {
+  let reads = 0;
+  let builds = 0;
+  const { root, generate } = await cancellationFixture(t,
+    async () => { builds++; return { workerSource: '' }; },
+    async () => { reads++; },
+  );
+  const controller = new AbortController();
+  const reason = new Error('already cancelled');
+  controller.abort(reason);
+  await assert.rejects(generate('fixture.json', { signal: controller.signal }), error => error === reason);
+  assert.equal(reads, 0);
+  assert.equal(builds, 0);
+  assert.deepEqual(await readdir(root), []);
+});
+
+test('caller mutations during config loading do not replace generation options', async (t) => {
+  for (const cancelOriginal of [false, true]) {
+    const original = new AbortController();
+    const replacement = new AbortController();
+    const progress: string[] = [];
+    let builds = 0;
+    const { root, generate } = await cancellationFixture(t, async (_input, context) => {
+      builds++;
+      assert.equal(context.signal, original.signal);
+      return { workerSource: '' };
+    });
+    const options: GenerateOptions = { signal: original.signal, onProgress(message) { assert.equal(this, options); progress.push(message); } };
+    const pending = generate('fixture.json', options);
+    options.signal = replacement.signal;
+    options.onProgress = () => { throw new Error('replacement progress must not run'); };
+    replacement.abort(new Error('unrelated cancellation'));
+    if (cancelOriginal) {
+      const reason = new Error('cancelled while reading config');
+      original.abort(reason);
+      await assert.rejects(pending, error => error === reason);
+      assert.equal(builds, 0);
+      assert.deepEqual(progress, []);
+      assert.deepEqual(await readdir(root), []);
+    } else {
+      await pending;
+      assert.equal(builds, 1);
+      assert.deepEqual(progress, ['building sample (go)']);
+      assert.deepEqual(await readdir(root), ['generated']);
+    }
+  }
+});
+
+test('cancelling from progress stops before invoking an adapter even after options mutation', async (t) => {
+  let builds = 0;
+  const { root, generate } = await cancellationFixture(t, async () => { builds++; return { workerSource: '' }; });
+  const controller = new AbortController();
+  const reason = new Error('cancelled from progress');
+  const options: GenerateOptions = { signal: controller.signal, onProgress: () => {
+    delete options.signal;
+    controller.abort(reason);
+  } };
+  await assert.rejects(generate('fixture.json', options), error => error === reason);
+  assert.equal(builds, 0);
+  assert.deepEqual(await readdir(root), []);
 });

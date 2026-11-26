@@ -15,6 +15,7 @@ export async function exerciseRust(page: Page) {
         label: await rust.label('안녕 🦀'),
         emptyString: await rust.label(''),
         scaled: await rust.scale([1, -2, 0, 3.5], 2),
+        zeroSigns: [Object.is(await rust.divide(-0, 1), -0), ...(await rust.scale([-0, 0], 1)).map(value => Object.is(value, -0)), Object.is((await rust.scale([1], -0))[0], -0)],
         empty: await rust.scale([], 2),
         signed: await rust.signed([-2147483648, 2147483647]),
         unsigned: await rust.unsigned([0, 4294967295]),
@@ -56,6 +57,7 @@ export async function exerciseRust(page: Page) {
   assert.equal(values.label, 'Rust: 안녕 🦀');
   assert.equal(values.emptyString, 'Rust: ');
   assert.deepEqual(values.scaled, [2, -4, 0, 7]);
+  assert.deepEqual(values.zeroSigns, [true, true, false, true]);
   assert.deepEqual(values.empty, []);
   assert.deepEqual(values.signed, [-2147483648, 2147483647]);
   assert.deepEqual(values.unsigned, [0, 4294967295]);

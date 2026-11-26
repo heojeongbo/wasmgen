@@ -63,6 +63,7 @@ test('failed rollback preserves the only recoverable copy and exposes both cause
   await assert.rejects(withOutput(output, build), failure => {
     assert(failure instanceof AggregateError);
     assert.deepEqual(failure.errors, [error, restore]);
+    assert.equal(failure.cause, error);
     assert.match(failure.message, /preserved at/);
     return true;
   });
@@ -153,4 +154,28 @@ test('cancellation before commit preserves the previous output', async (t) => {
   }, controller.signal), /cancelled before commit/);
   assert.equal(await fs.readFile(path.join(output, 'old.js'), 'utf8'), 'previous');
   assert.deepEqual(await fs.readdir(root), ['generated']);
+});
+
+test('cancellation during final output inspection or backup cannot publish the staged build', async (t) => {
+  for (const phase of ['inspection', 'backup']) {
+    const { root, output } = await fixture(t);
+    const controller = new AbortController();
+    const reason = new Error(`cancelled during ${phase}`);
+    let inspections = 0;
+    lstat = (async (...args: Parameters<typeof fs.lstat>) => {
+      if (++inspections === 2 && phase === 'inspection') controller.abort(reason);
+      return fs.lstat(...args);
+    }) as typeof fs.lstat;
+    const renamed: string[] = [];
+    rename = async (from, to) => {
+      renamed.push(String(from));
+      await fs.rename(from, to);
+      if (String(from) === output && phase === 'backup') controller.abort(reason);
+    };
+    await assert.rejects(withOutput(output, build, controller.signal), failure => failure === reason);
+    assert.equal(await fs.readFile(path.join(output, 'old.js'), 'utf8'), 'previous');
+    assert.deepEqual(await fs.readdir(root), ['generated']);
+    assert.equal(renamed.length, phase === 'inspection' ? 0 : 2);
+    assert(!renamed.some(file => file.endsWith('/output')));
+  }
 });
