@@ -24,6 +24,7 @@ for released changes and work that is still unreleased.
 
 - [Configuration reference](docs/configuration.md): fields, defaults, CLI and library API.
 - [Troubleshooting](docs/troubleshooting.md): toolchains, browser loading, CSP and output recovery.
+- [Adding a language](docs/adding-a-language.md): Adapter contracts, registration, lifecycle and required tests.
 - [Contributing](CONTRIBUTING.md): validation, adapter boundaries and release checks.
 
 ## Install
@@ -66,7 +67,7 @@ pnpm exec vite preview examples/web --base=/demo/
 ```
 
 To test a local build of the generator in another project, run `pnpm pack` here,
-then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.2.3.tgz`
+then `pnpm add -D /absolute/path/to/heojeongbo-wasmgen-0.2.4.tgz`
 there. This does not publish anything. Its runtime npm dependencies are the
 public `yaml`, `zod`, and `smol-toml` packages. Installation has no install/postinstall scripts
 or native builds; `prepack` compiles TypeScript when packaging the generator.
@@ -432,6 +433,10 @@ and schema/tool/type declarations. Configuration loading, output replacement,
 browser RPC, and shared web codegen do not need language branches. This is an
 internal extension point; this version does not expose a third-party plugin API.
 
+See [Adding a language](docs/adding-a-language.md) for the implementation sequence,
+build/Worker contracts, ownership rules, required tests, and changes that need a
+shared API design rather than an adapter alone.
+
 The browser adapter presents generated native APIs
 as a small `NativeOperations` contract; the calculation feature receives it
 as a dependency. The page owns DOM interaction while the feature owns the
@@ -474,7 +479,7 @@ pnpm run test:package
 
 `pnpm test` requires **100% statements, branches, functions and lines per file**
 across executable `src/**/*.ts`. It includes untested modules and fails below any
-threshold. The 0.2.3 suite passes 110 tests at 100% in all four metrics.
+threshold. The 0.2.4 suite passes 114 tests at 100% in all four metrics.
 HTML and JSON reports are written to `.artifacts/coverage/`.
 See [test coverage scope and workflow](docs/testing.md) for type-only modules,
 compiler fault injection, and the separate real-Wasm browser checks.

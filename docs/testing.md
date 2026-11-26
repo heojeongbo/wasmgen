@@ -15,7 +15,7 @@ pnpm run test:package
 
 `pnpm test` invokes `pnpm run test:coverage`. Both require 100% **statements,
 branches, functions and lines for every executable production file**, not just an
-aggregate percentage. Version 0.2.3 passes 110 tests with 100% in all four metrics.
+aggregate percentage. Version 0.2.4 passes 114 tests with 100% in all four metrics.
 
 The scope is the complete generator and browser runtime in `src/**/*.ts`: CLI,
 configuration, language adapters, bridge/code generation, output transactions,
@@ -79,3 +79,8 @@ Before release, require passing coverage, type/architecture checks and both brow
 suites on the release contents. Inspect the tarball, then verify public registry
 integrity and a fresh anonymous install after publishing. Coverage alone is not
 a substitute for that installed-package validation.
+
+For a new language, follow the [adapter acceptance checklist](adding-a-language.md#validation-before-declaring-support).
+Extend the real compiler/browser and installed-package fixtures as well as unit
+coverage; an adapter whose generated bridge has never run in a browser is not
+validated language support.

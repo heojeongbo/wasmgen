@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, lstat, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
-import { hasCode } from '../shared/errors.js';
+import { errorMessage, hasCode } from '../shared/errors.js';
 
 export async function filesIn(directory: string, prefix = ''): Promise<string[]> {
   const result: string[] = [];
@@ -40,6 +40,7 @@ export async function withOutput(output: string, build: (staging: string, result
   let staging: string | undefined;
   let backup: string | undefined;
   let preserveStaging = false;
+  const failures: unknown[] = [];
   try {
     await inspectOutput(output);
     staging = await mkdtemp(path.join(parent, '.wasmgen-stage-'));
@@ -64,10 +65,15 @@ export async function withOutput(output: string, build: (staging: string, result
       }
       throw error;
     }
-
+  } catch (error) {
+    failures.push(error);
   } finally {
-    try {
-      if (staging && !preserveStaging) await rm(staging, { recursive: true, force: true });
-    } finally { await rm(lock, { recursive: true, force: true }); }
+    for (const directory of [preserveStaging ? undefined : staging, lock]) {
+      if (!directory) continue;
+      try { await rm(directory, { recursive: true, force: true }); }
+      catch (error) { failures.push(error); }
+    }
   }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) throw new AggregateError(failures, failures.map(errorMessage).join('; '), { cause: failures[0] });
 }

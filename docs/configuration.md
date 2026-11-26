@@ -123,4 +123,7 @@ browser Worker termination.
 
 The generated browser factory has different options: `signal` owns the lifetime
 of the entire client and `timeoutMs` applies to initialization and each call,
-including queue time. See [browser client usage](../README.md#import-from-typescript).
+including queue time. These options are captured when creating the client;
+mutating the options object does not reconfigure it or replace its original
+signal. Create a new client to change its lifetime settings.
+See [browser client usage](../README.md#import-from-typescript).

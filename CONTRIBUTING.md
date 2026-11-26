@@ -49,6 +49,11 @@ contracts before introducing another abstraction. This is an internal extension
 point, not a supported third-party plugin API. Public browser names must remain
 independent of compiler runtime names.
 
+Follow [Adding a language](docs/adding-a-language.md) for the schema/registry
+changes, adapter scaffold, scratch/output ownership, Worker contract and acceptance
+tests. It also identifies which changes require a shared API design and what a
+future public plugin interface would need; plugin loading is not implemented.
+
 Test native success and errors, generated TypeScript, initialization failure,
 termination, queued calls and actual browser execution. Dependency integration
 tests should verify original sources/manifests/lockfiles are unchanged. Update

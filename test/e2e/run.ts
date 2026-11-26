@@ -89,7 +89,11 @@ await runBrowsers(root, async (page) => {
       initializing.abort(new Error('abort during initialization'));
       const abortInitialization = await errorOf(() => initialization);
       const pendingAbort = new AbortController();
-      const pendingClient = await geometry({ signal: pendingAbort.signal });
+      const pendingOptions = { signal: pendingAbort.signal };
+      const pendingClient = await geometry(pendingOptions);
+      const replacement = new AbortController();
+      pendingOptions.signal = replacement.signal;
+      replacement.abort(new Error('replacement must not own this client'));
       const pendingCall = pendingClient.busy(10_000);
       pendingAbort.abort(new Error('abort pending computation'));
       const abortPending = await errorOf(() => pendingCall);

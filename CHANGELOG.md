@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.4
+
+- Retain the browser client's original cancellation signal when callers mutate
+  their options, remove its listener on disposal, and detect cancellation during
+  Worker construction before waiting for initialization.
+- Preserve build/rollback failures alongside cleanup failures, including the
+  recoverable backup path. Attempt staging and lock cleanup independently.
+- Added a language extension guide covering Adapter contracts, schema/registry
+  changes, build ownership, browser semantics, required tests and the boundary
+  between built-in adapters and a possible future plugin API.
+- Added lifecycle/output regression tests and a real-browser mutable-options
+  cancellation check; all 114 unit tests retain per-file 100% production
+  TypeScript statement, branch, function and line coverage.
+
 ## 0.2.3
 
 - Added per-file 100% statement, branch, function and line coverage checks to

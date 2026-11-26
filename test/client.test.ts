@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { connect, type WorkerPort } from '../src/runtime/client.js';
+import { getEventListeners } from 'node:events';
+import { connect, type ClientOptions, type WorkerPort } from '../src/runtime/client.js';
 
 class WorkerStub implements WorkerPort {
   onmessage: WorkerPort['onmessage'] = null;
@@ -114,6 +115,37 @@ test('aborting after initialization terminates the instance, including signals w
     await pending;
     assert(worker.terminated);
   }
+});
+
+test('client owns its original signal even when the caller changes options', async () => {
+  for (const end of ['abort', 'dispose']) {
+    const worker = new WorkerStub();
+    const original = new AbortController();
+    const replacement = new AbortController();
+    const options: ClientOptions = { signal: original.signal };
+    const connection = connect(() => worker, options);
+    worker.receive({ type: 'ready' });
+    const client = await connection;
+    options.signal = replacement.signal;
+    replacement.abort(new Error('unrelated signal'));
+    assert.equal(worker.terminated, false);
+    const pending = assert.rejects(client.call('value', []), end === 'abort' ? /original reason/ : /disposed/);
+    if (end === 'abort') original.abort(new Error('original reason'));
+    else client.dispose();
+    await pending;
+    assert(worker.terminated);
+    assert.equal(getEventListeners(original.signal, 'abort').length, 0);
+  }
+});
+
+test('cancellation during Worker construction rejects initialization immediately', async () => {
+  const worker = new WorkerStub();
+  const controller = new AbortController();
+  const reason = new Error('cancelled during construction');
+  const connection = connect(() => { controller.abort(reason); return worker; }, { signal: controller.signal, timeoutMs: 10 });
+  await assert.rejects(connection, failure => failure === reason);
+  assert(worker.terminated);
+  assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
 });
 
 test('invalid messages and Worker errors fail initialization deterministically', async () => {

@@ -104,6 +104,15 @@ or machine shutdown can leave staging/lock directories or a partially completed
 directory swap; do not assume crash recovery is automatic. Do not retarget
 symlinks or edit the output concurrently with generation.
 
+When generation and cleanup both fail, the error message retains each diagnostic,
+including a preserved backup path after failed rollback. The Node API exposes an
+`AggregateError` whose `errors` are ordered as the operation failure, staging
+cleanup failure and lock cleanup failure, omitting phases that succeeded;
+`cause` is the first failure. A single failure is rethrown unchanged. Cleanup
+failure after a successful replacement can reject generation even though the new
+output is already installed: inspect the output and diagnostic before retrying.
+An unreleased lock still requires the no-running-generator check above.
+
 ## Public npm installation
 
 Use `pnpm add -D @heojeongbo/wasmgen`. No internal registry or npm token is needed.

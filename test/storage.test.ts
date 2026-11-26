@@ -92,6 +92,52 @@ test('staging cleanup errors still release the generation lock', async (t) => {
   assert(!(await fs.readdir(root)).includes('generated.wasmgen-lock'));
 });
 
+test('cleanup failures retain the build failure and attempt both cleanup operations', async (t) => {
+  const { root, output } = await fixture(t);
+  const primary = new Error('compiler failed');
+  const stagingError = new Error('cannot clean staging');
+  const lockError = new Error('cannot release lock');
+  const cleaned: string[] = [];
+  rm = async file => {
+    cleaned.push(String(file));
+    throw String(file).endsWith('.wasmgen-lock') ? lockError : stagingError;
+  };
+  await assert.rejects(withOutput(output, async () => { throw primary; }), failure => {
+    assert(failure instanceof AggregateError);
+    assert.deepEqual(failure.errors, [primary, stagingError, lockError]);
+    assert.equal(failure.cause, primary);
+    assert.match(failure.message, /compiler failed/);
+    assert.match(failure.message, /cannot release lock/);
+    return true;
+  });
+  assert.equal(cleaned.length, 2);
+  assert.equal(cleaned[1], output + '.wasmgen-lock');
+  assert.equal(await fs.readFile(path.join(output, 'old.js'), 'utf8'), 'previous');
+  assert((await fs.readdir(root)).includes('generated.wasmgen-lock'));
+});
+
+test('lock cleanup cannot hide the recovery path after a failed rollback', async (t) => {
+  const { root, output } = await fixture(t);
+  const restore = new Error('restore failed');
+  rename = async (from, to) => {
+    if (String(from).endsWith('/output')) throw error;
+    if (String(from).endsWith('/previous')) throw restore;
+    await fs.rename(from, to);
+  };
+  rm = async () => { throw new Error('lock cleanup failed'); };
+  await assert.rejects(withOutput(output, build), failure => {
+    assert(failure instanceof AggregateError);
+    assert.match(failure.message, /cannot restore previous output; preserved at/);
+    assert.match(failure.message, /lock cleanup failed/);
+    const rollback: unknown = failure.errors[0];
+    assert(rollback instanceof AggregateError);
+    assert.deepEqual(rollback.errors, [error, restore]);
+    return true;
+  });
+  const stage = (await fs.readdir(root)).find(entry => entry.startsWith('.wasmgen-stage-'))!;
+  assert.equal(await fs.readFile(path.join(root, stage, 'previous/old.js'), 'utf8'), 'previous');
+});
+
 test('output inventory rejects symbolic links without following their targets', async (t) => {
   const { root, output } = await fixture(t);
   await fs.symlink(root, path.join(output, 'redirect'));
